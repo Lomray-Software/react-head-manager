@@ -84,6 +84,13 @@ class Manager {
   };
 
   /**
+   * System tag attributes
+   */
+  protected reservedAttributes = {
+    order: 'data-order',
+  };
+
+  /**
    * @constructor
    */
   constructor(tags: Partial<Manager['tags']> = {}) {
@@ -116,14 +123,14 @@ class Manager {
    */
   public getTags(): IMetaManagerTags {
     const { meta, body, html, containers } = this.tags;
-    const sortedMeta = new Map(
+    const sortedTags = new Map(
       [...meta.entries()].sort(([, tagA], [, tagB]) => tagA.order - tagB.order),
     );
 
     return {
       body,
       html,
-      meta: sortedMeta,
+      meta: sortedTags,
       containers,
     };
   }
@@ -210,6 +217,34 @@ class Manager {
   }
 
   /**
+   * Clone react element
+   */
+  protected cloneElement(element: ReactElement): {
+    element: ReactElement;
+    elementProps: Record<string, any>;
+  } {
+    const { type } = element;
+    const props = { ...(element?.props ?? {}) } as Record<string, any>;
+
+    // remove system attributes
+    Object.values(this.reservedAttributes).forEach((attrName) => {
+      if (props[attrName]) {
+        delete props[attrName];
+      }
+    });
+
+    // fix multiple nodes for title
+    if (type === 'title' && Array.isArray(props.children)) {
+      props.children = props.children.join('');
+    }
+
+    return {
+      element: React.createElement(type, props),
+      elementProps: props,
+    };
+  }
+
+  /**
    * Push react elements to meta state
    */
   protected pushElements(
@@ -224,21 +259,17 @@ class Manager {
         return;
       }
 
-      const { type, props } = child;
-      const elementProps: Record<string, any> = props ?? {};
+      const { type } = child;
+      const { element, elementProps } = this.cloneElement(child);
+      const elementOrder = elementProps[this.reservedAttributes.order]
+        ? Number(elementProps[this.reservedAttributes.order])
+        : undefined;
 
-      let order = this.tagsDefinitions[type as string]?.order ?? 1000;
+      let order = elementOrder ?? this.tagsDefinitions[type as string]?.order ?? 1000;
       let key = this.tagsDefinitions[type as string]?.key ?? (type as string);
-      let element = child;
 
       switch (type) {
         case 'title':
-          const { children } = elementProps;
-
-          // fix multiple nodes
-          element = Array.isArray(children)
-            ? React.cloneElement(child, { children: children.join('') })
-            : child;
           break;
 
         case 'meta':
@@ -329,21 +360,26 @@ class Manager {
    */
   protected applyDomElementAttributes(element: Element, props: Record<string, any> = {}): void {
     const tagName = element.tagName.toLowerCase();
+    const reservedAttributes = Object.values(this.reservedAttributes);
 
     // apply attributes
     Object.entries(props).forEach(([name, value]) => {
-      if (name === 'children') {
-        element.innerHTML = value;
+      switch (name) {
+        case 'children':
+          element.innerHTML = value;
 
-        return;
+          return;
+
+        case 'style':
+          return Object.entries(value as Record<string, string>).forEach(
+            ([styleName, styleValue]) => {
+              element['style'][styleName] = styleValue;
+            },
+          );
       }
 
-      if (name === 'style') {
-        return Object.entries(value as Record<string, string>).forEach(
-          ([styleName, styleValue]) => {
-            element['style'][styleName] = styleValue;
-          },
-        );
+      if (reservedAttributes[name]) {
+        return;
       }
 
       element.setAttribute(this.replaceAttribute(tagName, name), value as string);
