@@ -18,8 +18,11 @@ The package is distributed using [npm](https://www.npmjs.com/), the node package
 npm i --save @lomray/react-head-manager
 ```
 
+__WARNING:__ this package use [@lomray/consistent-suspense](https://github.com/Lomray-Software/consistent-suspense) for generate stable id's inside Suspense.
+
 ## Usage
 ```typescript jsx
+import { ConsistentSuspenseProvider } from '@lomray/consistent-suspense';
 import { MetaManagerProvider, Manager, Meta } from '@lomray/react-head-manager';
 
 const manager = new Manager();
@@ -31,9 +34,11 @@ const App = ({ children }) => {
     const [state] = useState();
 
     return (
-      <MetaManagerProvider manager={manager}>
-        <MyComponent />
-      </MetaManagerProvider>
+      <ConsistentSuspenseProvider> {/** required, see warning above **/}
+        <MetaManagerProvider manager={manager}>
+          <MyComponent />
+        </MetaManagerProvider>
+      </ConsistentSuspenseProvider>
     )
 }
 
@@ -82,9 +87,7 @@ manager.setTagsDefinitions({
  */
 ```
 
-__NOTE:__ this package use [@lomray/consistent-suspense](https://github.com/Lomray-Software/consistent-suspense) for generate stable id's. 
-
-See [demo app](https://github.com/Lomray-Software/vite-template) to more understand.
+Explore [demo app](https://github.com/Lomray-Software/vite-template) to more understand.
 
 ## Bugs and feature requests
 
