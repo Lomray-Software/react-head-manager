@@ -91,6 +91,11 @@ class Manager {
   };
 
   /**
+   * Scheduled synchronization
+   */
+  protected syncTimerId: null | NodeJS.Timeout = null;
+
+  /**
    * @constructor
    */
   constructor(tags: Partial<Manager['tags']> = {}) {
@@ -392,6 +397,10 @@ class Manager {
   protected syncMeta(containerId?: string): void {
     const { meta, html, body } = this.getTags();
 
+    if (this.syncTimerId) {
+      clearTimeout(this.syncTimerId);
+    }
+
     // apply html, body props
     for (const { name, value } of [
       { name: 'html', value: html },
@@ -519,6 +528,7 @@ class Manager {
     this.tags.body.delete(containerId);
     this.tags.html.delete(containerId);
     this.tags.containers.delete(containerId);
+    this.syncTimerId = setTimeout(() => this.syncMeta(), 500);
   }
 
   /**
