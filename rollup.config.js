@@ -5,14 +5,16 @@ import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import { folderInput } from 'rollup-plugin-folder-input';
 import copy from 'rollup-plugin-copy';
 
+const dest = 'lib';
+
 export default {
   input: [
     'src/index.ts',
     'src/server/index.ts',
   ],
   output: {
-    dir: 'lib',
-    format: 'cjs',
+    dir: dest,
+    format: 'es',
     sourcemap: true,
     preserveModules: true,
     preserveModulesRoot: 'src',
@@ -25,22 +27,6 @@ export default {
   plugins: [
     folderInput(),
     typescript({
-      transpiler: {
-        typescriptSyntax: 'typescript',
-        otherSyntax: 'babel'
-      },
-      babelConfig: {
-        presets: [
-          '@babel/preset-env',
-          '@babel/preset-react'
-        ],
-        plugins: [
-          ['@babel/plugin-proposal-class-properties'],
-          ['@babel/plugin-transform-runtime', {
-            "absoluteRuntime": false,
-          }],
-        ],
-      },
       tsconfig: resolvedConfig => ({
         ...resolvedConfig,
         declaration: true,
@@ -60,7 +46,9 @@ export default {
     terser(),
     copy({
       targets: [
-        { src: 'package.json', dest: 'lib' },
+        { src: 'package.json', dest: dest },
+        { src: 'README.md', dest: dest },
+        { src: 'LICENSE', dest: dest },
       ]
     })
   ],
