@@ -1,16 +1,23 @@
 import htmlParser from 'html-react-parser';
 import type { ReactElement, ReactNode } from 'react';
-import React, { Children } from 'react';
-
-enum TagStatus {
-  init = 'init',
-  synced = 'synced',
-  drain = 'drain',
-}
+import React, { Fragment, Children } from 'react';
+import TagStatus from './tag-status';
 
 export interface IMetaManagerTags {
-  html: Map<string, Record<string, any>>; // containerId => styles
-  body: Map<string, Record<string, any>>; // containerId => styles
+  html: Map<
+    string,
+    {
+      props: Record<string, any>;
+      order: number;
+    }
+  >;
+  body: Map<
+    string,
+    {
+      props: Record<string, any>;
+      order: number;
+    }
+  >; // containerId => styles
   meta: Map<
     string,
     {
@@ -124,18 +131,24 @@ class Manager {
   }
 
   /**
+   * Sort elements or props
+   */
+  protected sortTags<T extends Map<string, { order: number }>>(elements: T): T {
+    return new Map(
+      [...elements.entries()].sort(([, tagA], [, tagB]) => tagA.order - tagB.order),
+    ) as T;
+  }
+
+  /**
    * Get meta tags
    */
   public getTags(): IMetaManagerTags {
     const { meta, body, html, containers } = this.tags;
-    const sortedTags = new Map(
-      [...meta.entries()].sort(([, tagA], [, tagB]) => tagA.order - tagB.order),
-    );
 
     return {
-      body,
-      html,
-      meta: sortedTags,
+      html: this.sortTags(html),
+      body: this.sortTags(body),
+      meta: this.sortTags(meta),
       containers,
     };
   }
@@ -250,6 +263,23 @@ class Manager {
   }
 
   /**
+   * Get element order
+   */
+  protected getElementOrder(
+    elementProps: Record<string, any>,
+    type: string,
+    key: string = 'unknown',
+  ): number {
+    const elementOrder = elementProps[this.reservedAttributes.order]
+      ? Number(elementProps[this.reservedAttributes.order])
+      : undefined;
+
+    return (
+      elementOrder ?? this.tagsDefinitions[key]?.order ?? this.tagsDefinitions[type]?.order ?? 1000
+    );
+  }
+
+  /**
    * Push react elements to meta state
    */
   protected pushElements(
@@ -258,20 +288,27 @@ class Manager {
     isReplace = true,
     status = TagStatus.init,
   ): void {
-    Children.forEach(elements, (child, index) => {
+    // unwrap fragment
+    const clearElements: ReactNode =
+      elements && typeof elements === 'object' && 'type' in elements && elements.type === Fragment
+        ? elements.props.children
+        : elements;
+
+    Children.forEach(clearElements, (child, index) => {
       // skip unsupported elements
-      if (!child || typeof child !== 'object' || !('type' in child) || !child.type) {
+      if (
+        !child ||
+        typeof child !== 'object' ||
+        !('type' in child) ||
+        !child.type ||
+        typeof child.type !== 'string'
+      ) {
         return;
       }
 
       const { type } = child;
       const { element, elementProps } = this.cloneElement(child);
-      const elementOrder = elementProps[this.reservedAttributes.order]
-        ? Number(elementProps[this.reservedAttributes.order])
-        : undefined;
-
-      let order = elementOrder ?? this.tagsDefinitions[type as string]?.order ?? 1000;
-      let key = this.tagsDefinitions[type as string]?.key ?? (type as string);
+      let key = this.tagsDefinitions[type]?.key ?? type;
 
       switch (type) {
         case 'title':
@@ -296,7 +333,13 @@ class Manager {
             return;
           }
 
-          this.tags[type].set(containerId, Manager.cleanupElementProps(elementProps));
+          this.tags[type].set(containerId, {
+            props: Manager.cleanupElementProps(elementProps),
+            order:
+              containerId === Manager.rootContainerId
+                ? 1
+                : this.getElementOrder(elementProps, type, key),
+          });
 
           return;
 
@@ -306,8 +349,8 @@ class Manager {
         case 'style':
         default:
           key =
-            this.buildKeyByProps(type as string, elementProps, true) ??
-            this.getDefaultKey(type as string, containerId, index);
+            this.buildKeyByProps(type, elementProps, true) ??
+            this.getDefaultKey(type, containerId, index);
           break;
       }
 
@@ -321,11 +364,6 @@ class Manager {
         return;
       }
 
-      // custom order
-      if (this.tagsDefinitions[key]?.order) {
-        order = this.tagsDefinitions[key]?.order;
-      }
-
       this.tags.meta.set(key, {
         element: this.isServer ? element : undefined, // keep element only for server render
         domElement:
@@ -334,7 +372,7 @@ class Manager {
            * generate DOM element for root container inside @see this.analyzeClientHead
            */
           containerId === Manager.rootContainerId ? undefined : this.createDomElement(element),
-        order,
+        order: this.getElementOrder(elementProps, type, key),
         containerId,
         status,
       });
@@ -354,7 +392,7 @@ class Manager {
     return [...props.values()].reduce(
       (res, val) => ({
         ...res,
-        ...val,
+        ...val.props,
       }),
       {},
     );
@@ -378,12 +416,13 @@ class Manager {
         case 'style':
           return Object.entries(value as Record<string, string>).forEach(
             ([styleName, styleValue]) => {
+              // @ts-ignore
               element['style'][styleName] = styleValue;
             },
           );
       }
 
-      if (reservedAttributes[name]) {
+      if (reservedAttributes.includes(name)) {
         return;
       }
 
@@ -541,6 +580,7 @@ class Manager {
 
     // parse default attributes for root tags
     for (const tagName of ['html', 'body']) {
+      // @ts-ignore
       const htmlTag = document.getElementsByTagName(tagName)?.[0].cloneNode(false)?.[
         'outerHTML'
       ] as string;

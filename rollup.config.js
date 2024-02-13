@@ -1,8 +1,6 @@
 import typescript from 'rollup-plugin-ts';
-import json from '@rollup/plugin-json';
 import terser from '@rollup/plugin-terser';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
-import { folderInput } from 'rollup-plugin-folder-input';
 import copy from 'rollup-plugin-copy';
 
 const dest = 'lib';
@@ -25,24 +23,16 @@ export default {
     'html-react-parser',
   ],
   plugins: [
-    folderInput(),
     typescript({
       tsconfig: resolvedConfig => ({
         ...resolvedConfig,
         declaration: true,
         importHelpers: true,
-        plugins: [
-          {
-            "transform": "@zerollup/ts-transform-paths",
-            "exclude": ["*"]
-          }
-        ]
       }),
     }),
     peerDepsExternal({
       includeDependencies: true,
     }),
-    json(),
     terser(),
     copy({
       targets: [
