@@ -172,6 +172,7 @@ class Manager {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { type, props } = element;
     const domElement = document.createElement(type as string);
 
@@ -291,7 +292,7 @@ class Manager {
     // unwrap fragment
     const clearElements: ReactNode =
       elements && typeof elements === 'object' && 'type' in elements && elements.type === Fragment
-        ? elements.props.children
+        ? ((elements.props as Record<string, any>).children as ReactNode)
         : elements;
 
     Children.forEach(clearElements, (child, index) => {
@@ -409,7 +410,7 @@ class Manager {
     Object.entries(props).forEach(([name, value]) => {
       switch (name) {
         case 'children':
-          element.innerHTML = value;
+          element.innerHTML = value as string;
 
           return;
 
@@ -417,6 +418,7 @@ class Manager {
           return Object.entries(value as Record<string, string>).forEach(
             ([styleName, styleValue]) => {
               // @ts-ignore
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
               element['style'][styleName] = styleValue;
             },
           );
