@@ -1,6 +1,8 @@
+import EventManager from '@lomray/event-manager';
 import htmlParser from 'html-react-parser';
 import type { ReactElement, ReactNode } from 'react';
 import React, { Fragment, Children } from 'react';
+import Events from './events';
 import TagStatus from './tag-status';
 
 export interface IMetaManagerTags {
@@ -519,6 +521,8 @@ class Manager {
 
       prevElement = domElement;
     });
+
+    EventManager.publish(Events.SYNC_META, {});
   }
 
   /**
@@ -533,6 +537,8 @@ class Manager {
       isReplace,
       isAdded ? TagStatus.synced : TagStatus.init,
     );
+
+    EventManager.publish(Events.PUSH_TAGS, { elements, containerId });
 
     // skip sync already synced tags
     if (this.isServer || isAdded) {

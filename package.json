@@ -71,6 +71,7 @@
   },
   "peerDependencies": {
     "@lomray/consistent-suspense": ">=2.0.1",
+    "@lomray/event-manager": ">=2.0.2",
     "react": ">=17.0.2",
     "react-dom": ">=17.0.2"
   }
