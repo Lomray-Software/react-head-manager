@@ -194,7 +194,7 @@ class Manager {
     let key = '';
 
     // try to build unique key by unique props
-    for (const uniqueAttr of ['id', 'name', 'href', 'src']) {
+    for (const uniqueAttr of ['id', 'name', 'property', 'href', 'src']) {
       if (props[uniqueAttr]) {
         key = `[${uniqueAttr}='${props[uniqueAttr] as string}']`;
 
