@@ -62,4 +62,30 @@ describe('Manager', () => {
       '<meta charset="UTF-8"><meta data-test="2" style="color: black;"><style>#test { color: red; }</style>',
     );
   });
+
+  it('should keep og:* meta tags distinct by property (regression: property collapse)', () => {
+    const manager = new Manager();
+
+    manager.isServer = true;
+
+    manager.pushTags(
+      <>
+        <meta property="og:title" content="Title A" />
+        <meta property="og:description" content="Desc B" />
+        <meta property="og:url" content="https://example.com/page" />
+        <meta property="og:image" content="https://example.com/img.png" />
+      </>,
+      containerId,
+    );
+
+    const { meta } = manager.getTags();
+    const htmlMeta = renderServerMeta(meta);
+    const ogCount = (htmlMeta.match(/property="og:/g) ?? []).length;
+
+    expect(ogCount).to.equal(4);
+    expect(htmlMeta).to.contain('property="og:title"');
+    expect(htmlMeta).to.contain('property="og:description"');
+    expect(htmlMeta).to.contain('property="og:url"');
+    expect(htmlMeta).to.contain('property="og:image"');
+  });
 });
