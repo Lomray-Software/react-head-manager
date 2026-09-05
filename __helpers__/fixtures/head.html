@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr" class="theme-dark" data-x="root" style="margin-top:2px; line-height:1.5; --accent:teal; -webkit-line-clamp:2">
+<head>
+  <!-- Preserve whitespace positions, but never attach a text or comment node. -->
+  <meta charset="UTF-8" data-order="99">
+  <meta http-equiv="content-security-policy" content="default-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1" data-order="2">
+  <meta name="description" content="A &amp; B">
+  <meta name="keywords" content="one,two" data-order="3">
+  <meta property="og:title" content="Social title">
+  <meta property="og:description" content="Social description">
+  <meta property="og:url" content="https://example.com/about">
+  <meta property="og:image" content="https://example.com/image.png">
+  <meta name="description" content="Duplicate: keep the first live node">
+  <meta class="custom" for="other" content="Fallback key" style="color:red">
+  <title>Snapshot &amp; "quotes" &lt;tags&gt;</title>
+  <base href="https://example.com/docs/">
+  <base>
+  <base>
+  <link rel="stylesheet" href="/main.css" crossorigin="anonymous">
+  <link rel="icon" href="/favicon.ico">
+  <script src="/app.js" async data-order="1"></script>
+  <script type="application/json">{"message":"<keep>&", "enabled":true}</script>
+  <script type="application/json">{"message":"<keep>&", "enabled":true}</script>
+  <style data-order="4">.sample::before { content: "a > b & c"; }</style>
+  <!-- Duplicate non-unique tags must retain their separate entries. -->
+  <style>.sample::before { content: "a > b & c"; }</style>
+  <noscript>Enable JavaScript &amp; reload.</noscript>
+</head>
+<body class="page" data-id="about"></body>
+</html>

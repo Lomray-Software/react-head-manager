@@ -1,9 +1,64 @@
 import EventManager from '@lomray/event-manager';
-import htmlParser from 'html-react-parser';
 import type { ReactElement, ReactNode } from 'react';
 import React, { Fragment, Children } from 'react';
 import Events from './events';
+import RootAttributes from './root-attributes';
 import TagStatus from './tag-status';
+
+// One source of truth for React prop names and their HTML attribute names.
+const attributeNames = new Map([
+  ['className', 'class'],
+  ['htmlFor', 'for'],
+  ['httpEquiv', 'http-equiv'],
+  ['charSet', 'charset'],
+  ['crossOrigin', 'crossorigin'],
+  ['referrerPolicy', 'referrerpolicy'],
+  ['tabIndex', 'tabindex'],
+  ['hrefLang', 'hreflang'],
+  ['imageSrcSet', 'imagesrcset'],
+  ['imageSizes', 'imagesizes'],
+  ['fetchPriority', 'fetchpriority'],
+  ['noModule', 'nomodule'],
+  ['srcSet', 'srcset'],
+  ['acceptCharset', 'accept-charset'],
+  ['itemProp', 'itemprop'],
+  ['itemScope', 'itemscope'],
+  ['itemType', 'itemtype'],
+  ['itemID', 'itemid'],
+  ['itemRef', 'itemref'],
+]);
+const propNames = new Map([...attributeNames].map(([prop, attribute]) => [attribute, prop]));
+
+// Presence means true for HTML boolean attributes, regardless of their text value.
+const booleanAttributes = new Set([
+  'allowfullscreen',
+  'async',
+  'autofocus',
+  'autoplay',
+  'checked',
+  'controls',
+  'default',
+  'defer',
+  'disabled',
+  'disablepictureinpicture',
+  'disableremoteplayback',
+  'formnovalidate',
+  'hidden',
+  'itemscope',
+  'loop',
+  'multiple',
+  'muted',
+  'nomodule',
+  'novalidate',
+  'open',
+  'playsinline',
+  'readonly',
+  'required',
+  'reversed',
+  'scoped',
+  'seamless',
+  'selected',
+]);
 
 export interface IMetaManagerTags {
   html: Map<
@@ -104,6 +159,9 @@ class Manager {
    */
   protected syncTimerId: null | NodeJS.Timeout = null;
 
+  /** DOM ownership is private client state, separate from the public tag snapshot. */
+  private rootAttributes = new WeakMap<HTMLElement, RootAttributes>();
+
   /**
    * @constructor
    */
@@ -159,11 +217,7 @@ class Manager {
    * Replace react attribute to valid DOM attribute
    */
   protected replaceAttribute(tagName: string, attribute: string): string {
-    if (tagName === 'meta' && attribute.toLowerCase() === 'httpequiv') {
-      return 'http-equiv';
-    }
-
-    return attribute;
+    return attributeNames.get(attribute) ?? attribute;
   }
 
   /**
@@ -240,7 +294,7 @@ class Manager {
   /**
    * Clone react element
    */
-  protected cloneElement(element: ReactElement): {
+  protected cloneElement(element: Pick<ReactElement, 'type' | 'props'>): {
     element: ReactElement;
     elementProps: Record<string, any>;
   } {
@@ -309,79 +363,107 @@ class Manager {
         return;
       }
 
-      const { type } = child;
-      const { element, elementProps } = this.cloneElement(child);
-      let key = this.tagsDefinitions[type]?.key ?? type;
-
-      switch (type) {
-        case 'title':
-          break;
-
-        case 'meta':
-          const { charSet, httpEquiv } = elementProps;
-
-          if (charSet) {
-            key = `meta[charset]`;
-          } else if (httpEquiv) {
-            key = `meta[httpEquiv]`;
-          } else {
-            key = this.buildKeyByProps(type, elementProps)!;
-          }
-
-          break;
-
-        case 'html':
-        case 'body':
-          if (!isReplace && this.tags[type].has(key)) {
-            return;
-          }
-
-          this.tags[type].set(containerId, {
-            props: Manager.cleanupElementProps(elementProps),
-            order:
-              containerId === Manager.rootContainerId
-                ? 1
-                : this.getElementOrder(elementProps, type, key),
-          });
-
-          return;
-
-        case 'link':
-        case 'script':
-        case 'noscript':
-        case 'style':
-        default:
-          key =
-            this.buildKeyByProps(type, elementProps, true) ??
-            this.getDefaultKey(type, containerId, index);
-          break;
-      }
-
-      // skip replace existed meta tag (e.g. for push existed tags from parsed html, @see ServerManager)
-      if (!isReplace && this.tags.meta.has(key)) {
-        return;
-      }
-
-      // skip push already existed in head not unique tags
-      if (this.isNotUniqueTag(key) && this.tags.meta.get(key)?.status === TagStatus.synced) {
-        return;
-      }
-
-      this.tags.meta.set(key, {
-        element: this.isServer ? element : undefined, // keep element only for server render
-        domElement:
-          /**
-           * create DOM element only for client side
-           * generate DOM element for root container inside @see this.analyzeClientHead
-           */
-          containerId === Manager.rootContainerId ? undefined : this.createDomElement(element),
-        order: this.getElementOrder(elementProps, type, key),
+      this.pushElement(
+        { type: child.type, props: child.props as Record<string, any> },
+        index,
         containerId,
+        isReplace,
         status,
-      });
+      );
     });
 
     this.tags.containers.add(containerId);
+  }
+
+  /**
+   * Register a React element or a snapshot of a live DOM element.
+   */
+  protected pushElement(
+    child: { type: string; props: Record<string, any> },
+    index: number,
+    containerId: string,
+    isReplace: boolean,
+    status: TagStatus,
+    domElement?: HTMLElement,
+  ): void {
+    const { type } = child;
+    const { element, elementProps } = this.cloneElement(child);
+    let key = this.tagsDefinitions[type]?.key ?? type;
+
+    switch (type) {
+      case 'title':
+        break;
+
+      case 'meta':
+        const { charSet, httpEquiv } = elementProps;
+
+        if (charSet) {
+          key = `meta[charset]`;
+        } else if (httpEquiv) {
+          key = `meta[httpEquiv]`;
+        } else {
+          key = this.buildKeyByProps(type, elementProps)!;
+        }
+
+        break;
+
+      case 'html':
+      case 'body':
+        if (!isReplace && this.tags[type].has(key)) {
+          return;
+        }
+
+        this.tags[type].set(containerId, {
+          props: Manager.cleanupElementProps(elementProps),
+          order:
+            containerId === Manager.rootContainerId
+              ? 1
+              : this.getElementOrder(elementProps, type, key),
+        });
+
+        return;
+
+      case 'link':
+      case 'script':
+      case 'noscript':
+      case 'style':
+      default:
+        key =
+          this.buildKeyByProps(type, elementProps, true) ??
+          this.getDefaultKey(type, containerId, index);
+        break;
+    }
+
+    // skip replace existed meta tag (e.g. for push existed tags from parsed html, @see ServerManager)
+    const existedTag = this.tags.meta.get(key);
+
+    if (!isReplace && existedTag) {
+      // Hydration may register a detached node before analysis. Keep the first live duplicate.
+      if (domElement && existedTag.domElement?.parentNode !== domElement.parentNode) {
+        existedTag.domElement = domElement;
+      }
+
+      return;
+    }
+
+    // skip push already existed in head not unique tags
+    if (this.isNotUniqueTag(key) && existedTag?.status === TagStatus.synced) {
+      return;
+    }
+
+    this.tags.meta.set(key, {
+      element: this.isServer ? element : undefined, // keep element only for server render
+      domElement:
+        /**
+         * create DOM element only for client side
+         * generate DOM element for root container inside @see this.analyzeClientHead
+         */
+        domElement ??
+        (containerId === Manager.rootContainerId ? undefined : this.createDomElement(element)),
+      order: this.getElementOrder(elementProps, type, key),
+      containerId,
+      status,
+    });
   }
 
   /**
@@ -410,28 +492,73 @@ class Manager {
 
     // apply attributes
     Object.entries(props).forEach(([name, value]) => {
-      switch (name) {
-        case 'children':
-          element.innerHTML = value as string;
-
-          return;
-
-        case 'style':
-          return Object.entries(value as Record<string, string>).forEach(
-            ([styleName, styleValue]) => {
-              // @ts-ignore
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-              element['style'][styleName] = styleValue;
-            },
-          );
-      }
-
       if (reservedAttributes.includes(name)) {
         return;
       }
 
-      element.setAttribute(this.replaceAttribute(tagName, name), value as string);
+      if (name === 'children') {
+        element.innerHTML = value === false || value == null ? '' : (value as string);
+
+        return;
+      }
+
+      const attribute = this.replaceAttribute(tagName, name);
+
+      if (value === false || value == null) {
+        element.removeAttribute(attribute);
+
+        return;
+      }
+
+      if (name === 'style' && typeof value === 'object') {
+        return Object.entries(value as Record<string, string>).forEach(
+          ([styleName, styleValue]) => {
+            // @ts-ignore
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            element['style'][styleName] = styleValue;
+          },
+        );
+      }
+
+      element.setAttribute(attribute, value === true ? '' : (value as string));
     });
+  }
+
+  /** Merge root style objects while retaining ownership of each contributed property. */
+  private syncRootAttributes(
+    element: HTMLElement,
+    tags: IMetaManagerTags['html'],
+    seed = false,
+  ): void {
+    const props = this.getRootTagProps(tags);
+    const attributes = new Map(
+      Object.entries(props)
+        .filter(([name]) => !Object.values(this.reservedAttributes).includes(name))
+        .map(([name, value]) => [
+          this.replaceAttribute(element.tagName.toLowerCase(), name),
+          value === false || value == null ? null : value === true ? '' : String(value),
+        ]),
+    );
+    const style = [...tags.values()].reduce<Record<string, unknown>>(
+      (result, { props: tagProps }) => {
+        if (!('style' in tagProps)) {
+          return result;
+        }
+
+        return tagProps.style && typeof tagProps.style === 'object'
+          ? { ...result, ...(tagProps.style as Record<string, unknown>) }
+          : {};
+      },
+      {},
+    );
+    let ownership = this.rootAttributes.get(element);
+
+    if (!ownership) {
+      ownership = new RootAttributes();
+      this.rootAttributes.set(element, ownership);
+    }
+
+    ownership.sync(element, attributes, style, seed);
   }
 
   /**
@@ -449,24 +576,11 @@ class Manager {
       { name: 'html', value: html },
       { name: 'body', value: body },
     ]) {
-      const tagProps = this.getRootTagProps(value);
-      const domElement = document.querySelector(name);
-      const existAttributes = domElement?.getAttributeNames() ?? [];
+      const domElement = document.querySelector<HTMLElement>(name);
 
-      // remove drained props
-      existAttributes.forEach((attrName) => {
-        if (tagProps[attrName]) {
-          return;
-        }
-
-        domElement!.removeAttribute(attrName);
-      });
-
-      if (!Object.keys(tagProps).length || !domElement) {
-        continue;
+      if (domElement) {
+        this.syncRootAttributes(domElement, value);
       }
-
-      this.applyDomElementAttributes(domElement, tagProps);
     }
 
     if (!meta.size || this.isServer) {
@@ -579,6 +693,43 @@ class Manager {
   }
 
   /**
+   * Read attributes and text from the live DOM without serializing markup.
+   */
+  protected getDomElementProps(element: HTMLElement): Record<string, any> {
+    const props: Record<string, any> = Object.fromEntries(
+      Array.from(element.attributes, ({ name, value }) => [
+        propNames.get(name) ?? name,
+        booleanAttributes.has(name) || (['capture', 'download'].includes(name) && value === '')
+          ? true
+          : value,
+      ]),
+    );
+
+    if (element.hasAttribute('style')) {
+      // The DOM already parsed inline CSS; keep the React style object used by root tags.
+      props.style = Object.fromEntries(
+        Array.from(element.style, (name) => {
+          const propName = name.startsWith('--')
+            ? name
+            : name
+                .replace(/^-ms-/, 'ms-')
+                .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+          const priority = element.style.getPropertyPriority(name);
+          const value = element.style.getPropertyValue(name);
+
+          return [propName, priority ? `${value} !${priority}` : value];
+        }),
+      );
+    }
+
+    if (['title', 'style', 'script', 'noscript'].includes(element.tagName.toLowerCase())) {
+      props.children = element.textContent ?? '';
+    }
+
+    return props;
+  }
+
+  /**
    * Initial analyze client head meta tags
    */
   public analyzeClientHead(): void {
@@ -586,34 +737,66 @@ class Manager {
       return;
     }
 
-    // parse default attributes for root tags
-    for (const tagName of ['html', 'body']) {
-      // @ts-ignore
-      const htmlTag = document.getElementsByTagName(tagName)?.[0].cloneNode(false)?.[
-        'outerHTML'
-      ] as string;
+    for (const element of [document.documentElement, document.body]) {
+      if (element) {
+        const type = element.tagName.toLowerCase() as 'html' | 'body';
 
-      this.pushElements(htmlParser(htmlTag), Manager.rootContainerId, false);
+        this.pushElement(
+          { type, props: this.getDomElementProps(element) },
+          0,
+          Manager.rootContainerId,
+          false,
+          TagStatus.init,
+        );
+
+        if (!this.rootAttributes.has(element)) {
+          this.syncRootAttributes(
+            element,
+            new Map([[Manager.rootContainerId, this.tags[type].get(Manager.rootContainerId)!]]),
+            true,
+          );
+        }
+      }
     }
 
-    // parse default meta tags
-    const head = document.getElementsByTagName('head')?.[0];
-    const reactElements = htmlParser(head?.innerHTML ?? '');
+    let index = 0;
+    let isPreviousText = false;
 
-    this.pushElements(reactElements, Manager.rootContainerId, false, TagStatus.synced);
+    document.head?.childNodes.forEach((node) => {
+      // Text occupied React child positions in the old snapshot, but never made tags.
+      // Adjacent text nodes serialize as one; comments separate them without taking a position.
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.textContent) {
+          if (!isPreviousText) {
+            index += 1;
+          }
 
-    const meta = [...this.tags.meta.values()];
+          isPreviousText = true;
+        }
 
-    // attach real dom node to virtual tags
-    head.childNodes.forEach((node, i) => {
-      const existedElem = meta[i];
-
-      if (!existedElem) {
         return;
       }
 
-      existedElem.domElement = node as HTMLElement;
+      isPreviousText = false;
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+
+      const element = node as HTMLElement;
+
+      this.pushElement(
+        { type: element.tagName.toLowerCase(), props: this.getDomElementProps(element) },
+        index,
+        Manager.rootContainerId,
+        false,
+        TagStatus.synced,
+        element,
+      );
+      index += 1;
     });
+
+    this.tags.containers.add(Manager.rootContainerId);
   }
 }
 

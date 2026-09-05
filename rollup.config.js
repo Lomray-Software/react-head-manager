@@ -1,8 +1,10 @@
-import typescript from 'rollup-plugin-ts';
+import { createRequire } from 'node:module';
 import terser from '@rollup/plugin-terser';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import copy from 'rollup-plugin-copy';
 
+// Avoid legacy JSON import assertions in the plugin's ESM dependencies on Node 22.
+const typescript = createRequire(import.meta.url)('rollup-plugin-ts');
 const dest = 'lib';
 
 export default {
