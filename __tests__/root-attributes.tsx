@@ -5,6 +5,8 @@ import { Manager } from '../src';
 
 const themeAttribute = 'data-theme';
 const orderAttribute = 'data-order';
+const classContainer = 'class-owner';
+const styleContainer = 'style-owner';
 
 class ClientManager extends Manager {
   public sync(): void {
@@ -55,6 +57,188 @@ describe('Root attribute synchronization', () => {
     expect(document.body.getAttribute('data-id')).to.equal('test');
     expect(document.querySelector('[classname]')).to.equal(null);
     expect(document.title).to.equal('t');
+  });
+
+  it('preserves runtime root attributes across navigation and delayed synchronization', () => {
+    vi.useFakeTimers();
+    document.documentElement.setAttribute('lang', 'en');
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    document.documentElement.classList.add('dark');
+    document.body.setAttribute(themeAttribute, 'runtime');
+    manager.pushTags(<title>Home</title>, 'home');
+
+    const expectRuntimeAttributes = () => {
+      expect(document.documentElement.getAttribute('class')).to.equal('dark');
+      expect(document.body.getAttribute(themeAttribute)).to.equal('runtime');
+      expect(document.documentElement.getAttribute('lang')).to.equal('en');
+    };
+
+    expectRuntimeAttributes();
+    manager.removeTags('home');
+    manager.pushTags(<title>About</title>, 'about');
+    vi.advanceTimersByTime(500);
+    expectRuntimeAttributes();
+    manager.removeTags('about');
+    vi.advanceTimersByTime(500);
+    expectRuntimeAttributes();
+  });
+
+  it.each(['before', 'after'])('preserves runtime class tokens added %s a Meta class', (timing) => {
+    vi.useFakeTimers();
+    document.documentElement.setAttribute('lang', 'en');
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+
+    if (timing === 'before') {
+      document.documentElement.classList.add('dark');
+    }
+
+    manager.pushTags(<html lang="en" className="from-meta" />, classContainer);
+
+    if (timing === 'after') {
+      document.documentElement.classList.add('dark');
+    }
+
+    manager.pushTags(<title>About</title>, 'about');
+
+    expect(document.documentElement.classList.contains('dark')).to.equal(true);
+    expect(document.documentElement.classList.contains('from-meta')).to.equal(true);
+    manager.removeTags(classContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.documentElement.getAttribute('class')).to.equal('dark');
+    expect(document.documentElement.getAttribute('lang')).to.equal('en');
+  });
+
+  it('removes a class written only by Meta and leaves unrelated runtime attributes', () => {
+    vi.useFakeTimers();
+    document.documentElement.setAttribute('lang', 'en');
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    manager.pushTags(<html lang="en" className="from-meta" data-page="about" />, classContainer);
+    document.documentElement.setAttribute('data-runtime', 'keep');
+    manager.removeTags(classContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.documentElement.hasAttribute('class')).to.equal(false);
+    expect(document.documentElement.hasAttribute('data-page')).to.equal(false);
+    expect(document.documentElement.getAttribute('data-runtime')).to.equal('keep');
+    expect(document.documentElement.getAttribute('lang')).to.equal('en');
+  });
+
+  it('merges owned styles and restores snapshot properties without deleting runtime styles', () => {
+    vi.useFakeTimers();
+    document.documentElement.setAttribute('lang', 'en');
+    document.documentElement.style.color = 'red';
+    document.documentElement.style.marginTop = '2px';
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    document.documentElement.style.paddingTop = '3px';
+    manager.pushTags(
+      <html lang="en" style={{ color: 'blue', backgroundColor: 'black' }} />,
+      styleContainer,
+    );
+
+    expect(document.documentElement.style.color).to.equal('blue');
+    expect(document.documentElement.style.marginTop).to.equal('2px');
+    expect(document.documentElement.style.paddingTop).to.equal('3px');
+    document.documentElement.style.borderTopWidth = '4px';
+    manager.removeTags(styleContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.documentElement.style.color).to.equal('red');
+    expect(document.documentElement.style.backgroundColor).to.equal('');
+    expect(document.documentElement.style.marginTop).to.equal('2px');
+    expect(document.documentElement.style.paddingTop).to.equal('3px');
+    expect(document.documentElement.style.borderTopWidth).to.equal('4px');
+    expect(document.documentElement.getAttribute('lang')).to.equal('en');
+  });
+
+  it('removes a style attribute created only by Meta', () => {
+    vi.useFakeTimers();
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    manager.pushTags(<body style={{ color: 'red' }} />, styleContainer);
+    manager.removeTags(styleContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.body.hasAttribute('style')).to.equal(false);
+  });
+
+  it('keeps runtime edits to snapshot attributes when the requested props are unchanged', () => {
+    vi.useFakeTimers();
+    setupDocument();
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+    document.body.setAttribute('data-id', 'runtime');
+    manager.pushTags(<title>About</title>, 'about');
+    manager.removeTags('about');
+    vi.advanceTimersByTime(500);
+
+    expect(document.documentElement.getAttribute('class')).to.equal('light');
+    expect(document.body.getAttribute('data-id')).to.equal('runtime');
+    expect(document.documentElement.getAttribute('lang')).to.equal('en');
+  });
+
+  it('restores runtime values temporarily overridden by Meta and keeps subsequent external edits', () => {
+    vi.useFakeTimers();
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    document.body.setAttribute(themeAttribute, 'runtime');
+    document.body.style.color = 'red';
+    manager.pushTags(<body data-theme="meta" style={{ color: 'blue' }} />, styleContainer);
+
+    expect(document.body.getAttribute(themeAttribute)).to.equal('meta');
+    expect(document.body.style.color).to.equal('blue');
+    manager.removeTags(styleContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.body.getAttribute(themeAttribute)).to.equal('runtime');
+    expect(document.body.style.color).to.equal('red');
+    manager.pushTags(<body data-theme="meta" style={{ color: 'blue' }} />, styleContainer);
+    document.body.setAttribute(themeAttribute, 'external');
+    document.body.style.color = 'green';
+    manager.removeTags(styleContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.body.getAttribute(themeAttribute)).to.equal('external');
+    expect(document.body.style.color).to.equal('green');
+  });
+
+  it('restores earlier style contributions including custom properties and priorities', () => {
+    vi.useFakeTimers();
+    const manager = new ClientManager();
+
+    manager.analyzeClientHead();
+    manager.pushTags(<body style={{ color: 'red' }} />, 'layout');
+    document.body.style.paddingTop = '3px';
+    manager.pushTags(
+      <body style={{ color: 'blue', '--accent': 'black !important' } as React.CSSProperties} />,
+      styleContainer,
+    );
+
+    expect(document.body.style.getPropertyValue('--accent')).to.equal('black');
+    expect(document.body.style.getPropertyPriority('--accent')).to.equal('important');
+    manager.removeTags(styleContainer);
+    vi.advanceTimersByTime(500);
+
+    expect(document.body.style.color).to.equal('red');
+    expect(document.body.style.getPropertyValue('--accent')).to.equal('');
+    manager.removeTags('layout');
+    vi.advanceTimersByTime(500);
+
+    expect(document.body.style.color).to.equal('');
+    expect(document.body.style.paddingTop).to.equal('3px');
   });
 
   it('merges a Meta body class override and restores the root class on removal', () => {

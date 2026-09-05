@@ -2,6 +2,7 @@ import EventManager from '@lomray/event-manager';
 import type { ReactElement, ReactNode } from 'react';
 import React, { Fragment, Children } from 'react';
 import Events from './events';
+import RootAttributes from './root-attributes';
 import TagStatus from './tag-status';
 
 // One source of truth for React prop names and their HTML attribute names.
@@ -157,6 +158,9 @@ class Manager {
    * Scheduled synchronization
    */
   protected syncTimerId: null | NodeJS.Timeout = null;
+
+  /** DOM ownership is private client state, separate from the public tag snapshot. */
+  private rootAttributes = new WeakMap<HTMLElement, RootAttributes>();
 
   /**
    * @constructor
@@ -520,6 +524,43 @@ class Manager {
     });
   }
 
+  /** Merge root style objects while retaining ownership of each contributed property. */
+  private syncRootAttributes(
+    element: HTMLElement,
+    tags: IMetaManagerTags['html'],
+    seed = false,
+  ): void {
+    const props = this.getRootTagProps(tags);
+    const attributes = new Map(
+      Object.entries(props)
+        .filter(([name]) => !Object.values(this.reservedAttributes).includes(name))
+        .map(([name, value]) => [
+          this.replaceAttribute(element.tagName.toLowerCase(), name),
+          value === false || value == null ? null : value === true ? '' : String(value),
+        ]),
+    );
+    const style = [...tags.values()].reduce<Record<string, unknown>>(
+      (result, { props: tagProps }) => {
+        if (!('style' in tagProps)) {
+          return result;
+        }
+
+        return tagProps.style && typeof tagProps.style === 'object'
+          ? { ...result, ...(tagProps.style as Record<string, unknown>) }
+          : {};
+      },
+      {},
+    );
+    let ownership = this.rootAttributes.get(element);
+
+    if (!ownership) {
+      ownership = new RootAttributes();
+      this.rootAttributes.set(element, ownership);
+    }
+
+    ownership.sync(element, attributes, style, seed);
+  }
+
   /**
    * Synchronize local meta tags with head meta tags
    */
@@ -535,29 +576,11 @@ class Manager {
       { name: 'html', value: html },
       { name: 'body', value: body },
     ]) {
-      const tagProps = this.getRootTagProps(value);
-      const domElement = document.querySelector(name);
-      const existAttributes = domElement?.getAttributeNames() ?? [];
-      const attributes = new Set(
-        [...Object.keys(tagProps), ...Object.values(this.reservedAttributes)].map((attribute) =>
-          this.replaceAttribute(name, attribute),
-        ),
-      );
+      const domElement = document.querySelector<HTMLElement>(name);
 
-      // remove drained props
-      existAttributes.forEach((attrName) => {
-        if (attributes.has(attrName)) {
-          return;
-        }
-
-        domElement!.removeAttribute(attrName);
-      });
-
-      if (!Object.keys(tagProps).length || !domElement) {
-        continue;
+      if (domElement) {
+        this.syncRootAttributes(domElement, value);
       }
-
-      this.applyDomElementAttributes(domElement, tagProps);
     }
 
     if (!meta.size || this.isServer) {
@@ -716,13 +739,23 @@ class Manager {
 
     for (const element of [document.documentElement, document.body]) {
       if (element) {
+        const type = element.tagName.toLowerCase() as 'html' | 'body';
+
         this.pushElement(
-          { type: element.tagName.toLowerCase(), props: this.getDomElementProps(element) },
+          { type, props: this.getDomElementProps(element) },
           0,
           Manager.rootContainerId,
           false,
           TagStatus.init,
         );
+
+        if (!this.rootAttributes.has(element)) {
+          this.syncRootAttributes(
+            element,
+            new Map([[Manager.rootContainerId, this.tags[type].get(Manager.rootContainerId)!]]),
+            true,
+          );
+        }
       }
     }
 
