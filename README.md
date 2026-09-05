@@ -89,6 +89,10 @@ manager.setTagsDefinitions({
 
 Explore [demo app](https://github.com/Lomray-Software/vite-template) to more understand.
 
+## Bundle size
+
+The browser build reads the existing head from the DOM and ships no HTML parser. `html-react-parser` is used only by the server helper.
+
 ## Bugs and feature requests
 
 Bug or a feature request, [please open a new issue](https://github.com/Lomray-Software/react-head-manager/issues/new).
