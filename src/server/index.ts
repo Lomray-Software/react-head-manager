@@ -40,12 +40,17 @@ class ServerManager {
     const htmlMeta = ReactDOMServer.renderToString(
       [...meta.values()].map(({ element }) => element) as unknown as ReactElement,
     );
-    const [htmlTagWithProps] = ReactDOMServer.renderToString(
-      React.createElement('html', manager.getRootTagProps(html)),
-    ).split('</html>');
-    const [bodyTagWithProps] = ReactDOMServer.renderToString(
-      React.createElement('body', manager.getRootTagProps(body)),
-    ).split('</body>');
+    // Render a neutral element so React 19 does not insert document structure.
+    const [htmlTagWithProps] = ReactDOMServer.renderToStaticMarkup(
+      React.createElement('div', manager.getRootTagProps(html)),
+    )
+      .replace(/^<div/, '<html')
+      .split('</div>');
+    const [bodyTagWithProps] = ReactDOMServer.renderToStaticMarkup(
+      React.createElement('div', manager.getRootTagProps(body)),
+    )
+      .replace(/^<div/, '<body')
+      .split('</div>');
 
     return htmlStr
       .replace(/<head[^/].+?>?(?<meta>.+)<\/head>/s, `<head>${htmlMeta}</head>`)
