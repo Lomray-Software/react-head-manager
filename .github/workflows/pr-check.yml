@@ -73,6 +73,9 @@ jobs:
           npm pkg delete scripts.prepare
           npm run build -- --throw-warnings
 
+      - name: Test server worker bundle
+        run: npm run test:worker
+
   sonarcube:
     runs-on: ubuntu-latest
     needs: [check]

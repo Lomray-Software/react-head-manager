@@ -1,6 +1,7 @@
 // noinspection HtmlRequiredTitleElement
 
-import htmlParser from 'html-react-parser';
+import htmlToDOM from 'html-dom-parser/lib/server/html-to-dom';
+import domToReact from 'html-react-parser/lib/dom-to-react';
 import type { ReactElement } from 'react';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
@@ -11,6 +12,12 @@ interface IMetaManagerState {
   body: [string, Record<string, any>][];
   containers: string[];
 }
+
+/**
+ * Parse markup without a DOM while preserving React attribute conversion.
+ */
+const htmlParser = (html: string): ReturnType<typeof domToReact> =>
+  domToReact(htmlToDOM(html, { lowerCaseAttributeNames: false }));
 
 /**
  * Helpers for server side
