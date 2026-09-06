@@ -131,4 +131,28 @@ describe('ServerManager', () => {
       containers: ['custom', 'root'],
     });
   });
+
+  /**
+   * Preserve string-parser attribute casing even when a browser DOM is available.
+   */
+  it('should preserve custom element attribute casing and raw head content', () => {
+    const manager = new Manager();
+
+    manager.isServer = true;
+
+    const result = ServerManager.inject(
+      '<html lang="en"><head>\n<title>A &amp; B</title>' +
+        '<custom-meta buildId="Worker"></custom-meta>' +
+        '<script type="application/ld+json">{"value":"<tag>&"}</script>' +
+        '<style>.test > a { color: red; }</style></head><body></body></html>',
+      manager,
+    );
+
+    expect(result).to.equal(
+      '<html lang="en"><head><title>A &amp; B</title>' +
+        '<script type="application/ld+json">{"value":"<tag>&"}</script>' +
+        '<style>.test > a { color: red; }</style>' +
+        '<custom-meta buildId="Worker"></custom-meta></head><body></body></html>',
+    );
+  });
 });

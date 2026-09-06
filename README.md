@@ -89,6 +89,10 @@ manager.setTagsDefinitions({
 
 Explore [demo app](https://github.com/Lomray-Software/vite-template) to more understand.
 
+## Workers and edge rendering
+
+The `@lomray/react-head-manager/server` entry supports Cloudflare Workers and other non-DOM edge bundles, including Vite SSR with `ssr.target: 'webworker'`. `MetaServer.inject` and `MetaServer.getState` work without a `document` global or bundler aliases for `html-dom-parser`.
+
 ## Bundle size
 
 The browser build reads the existing head from the DOM and ships no HTML parser. `html-react-parser` is used only by the server helper.

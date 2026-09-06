@@ -22,6 +22,7 @@ export default {
   },
   external: [
     '@lomray/consistent-suspense',
+    'html-dom-parser/lib/server/html-to-dom',
     'html-react-parser',
   ],
   plugins: [

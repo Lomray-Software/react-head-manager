@@ -38,6 +38,7 @@
     "lint:format": "eslint --fix \"src/**/*.{ts,tsx,*.ts,*tsx}\"",
     "ts:check": "tsc --project ./tsconfig.json --skipLibCheck --noemit",
     "test": "vitest run",
+    "test:worker": "node scripts/test-worker.mjs",
     "test:package": "node scripts/test-package.mjs",
     "prepare": "husky install"
   },
