@@ -71,7 +71,7 @@
     "sinon": "^18.0.0",
     "sinon-chai": "^3.7.0",
     "typescript": "^5.3.3",
-    "vitest": "^2.0.5"
+    "vitest": "^5.0.1"
   },
   "peerDependencies": {
     "@lomray/consistent-suspense": ">=2.0.1",
