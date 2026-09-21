@@ -13,8 +13,13 @@ const env = { ...process.env };
 
 delete env.NO_COLOR;
 
+// Run the npm CLI that ships with the current Node binary instead of resolving "npm" through PATH.
+const npmCli =
+  process.env.npm_execpath ??
+  path.join(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
+
 const npm = (args, cwd, capture = false) =>
-  execFileSync('npm', args, {
+  execFileSync(process.execPath, [npmCli, ...args], {
     cwd,
     env,
     encoding: 'utf8',
