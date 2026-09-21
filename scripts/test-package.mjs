@@ -157,7 +157,7 @@ const result = ServerManager.inject(
   manager,
 );
 
-assert.equal(result, '<html lang="en"><head><meta charSet="UTF-8"/><title>Packed server works</title><link rel="icon" href="/favicon.ico"/></head><body class="page"></body></html>');
+assert.equal(result, '<html lang="en"><head><meta charset="UTF-8"><title>Packed server works</title><link rel="icon" href="/favicon.ico"></head><body class="page"></body></html>');
 assert.deepEqual(ServerManager.getState(manager), {
   html: [['root', { props: { lang: 'en' }, order: 1 }]],
   body: [['root', { props: { className: 'page' }, order: 1 }]],
