@@ -6,9 +6,7 @@ on:
     workflows: [ Check PR ]
     types: [ completed ]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   merge:
@@ -17,6 +15,9 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       startsWith(github.event.workflow_run.head_branch, 'dependabot/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       # Only the grouped updates merge on their own: "non-major" development packages and pinned actions.
