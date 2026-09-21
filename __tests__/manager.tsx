@@ -1,8 +1,7 @@
-import { expect } from 'chai';
 import React, { type ReactElement } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import sinon from 'sinon';
-import { afterEach, describe, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Manager } from '../src';
 import type { IMetaManagerTags } from '../src/manager';
 
