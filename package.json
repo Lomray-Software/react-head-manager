@@ -51,6 +51,7 @@
     "@lomray/eslint-config-react": "^5.0.6",
     "@lomray/prettier-config": "^2.0.1",
     "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@types/sinon": "^22.0.0",
@@ -67,10 +68,9 @@
     "rollup": "^4.21.2",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-peer-deps-external": "^2.2.4",
-    "rollup-plugin-ts": "^3.4.5",
     "semantic-release": "^25.0.9",
     "sinon": "^22.1.0",
-    "typescript": "^5.3.3",
+    "typescript": "^5.9.3",
     "vitest": "^5.0.1"
   },
   "peerDependencies": {
