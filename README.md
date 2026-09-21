@@ -21,44 +21,56 @@ npm i --save @lomray/react-head-manager
 __WARNING:__ this package use [@lomray/consistent-suspense](https://github.com/Lomray-Software/consistent-suspense) for generate stable id's inside Suspense.
 
 ## Usage
-```typescript jsx
+
+Pass a manager into your application rather than sharing a module-level instance across server requests.
+
+```tsx
+import React from 'react';
 import { ConsistentSuspenseProvider } from '@lomray/consistent-suspense';
 import { MetaManagerProvider, Manager, Meta } from '@lomray/react-head-manager';
 
-const manager = new Manager();
-
-/**
- * Root component container
- */
-const App = ({ children }) => {
-    const [state] = useState();
-
-    return (
-      <ConsistentSuspenseProvider> {/** required, see warning above **/}
-        <MetaManagerProvider manager={manager}>
-          <MyComponent />
-        </MetaManagerProvider>
-      </ConsistentSuspenseProvider>
-    )
-}
-
-/**
- * Some component
- */
-const MyComponent = () => {
-    return (
-      <>
-        <Meta>
-          <title>Example</title>
-          <meta name="description" content="Description example" />
-          <meta name="keywords" content="test,key" />
-          <body data-id="test" />
-        </Meta>
-        <div>Some component....</div>
-      </>
-    )
-}
+export const App = ({ manager }: { manager: Manager }) => (
+  <ConsistentSuspenseProvider>
+    <MetaManagerProvider manager={manager}>
+      <Meta>
+        <title>Example</title>
+        <meta name="description" content="Description example" />
+        <body data-id="test" />
+      </Meta>
+      <main>Example page</main>
+    </MetaManagerProvider>
+  </ConsistentSuspenseProvider>
+);
 ```
+
+For a client-rendered app, create one manager when mounting the application:
+
+```tsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { Manager } from '@lomray/react-head-manager';
+import { App } from './app';
+
+const root = document.getElementById('root');
+
+if (!root) {
+  throw new Error('Missing #root element');
+}
+
+createRoot(root).render(<App manager={new Manager()} />);
+```
+
+### Server rendering
+
+Create a fresh manager for **each request** and pass it to both your application and the server helpers. Do not reuse one server manager across requests: it holds the tags and container state for that render.
+
+The server helpers are the default export from `@lomray/react-head-manager/server`. `MetaServer.inject(html, manager)` inserts the collected tags into your HTML; `MetaServer.getState(manager)` returns state for the client manager. SSR also needs the corresponding hydration and Suspense setup; the client-only mount above is not an SSR hydration example.
+
+The [minimal SSR template](https://github.com/Lomray-Software/vite-template/tree/example/minimal) shows the complete integration:
+
+- [`src/server.ts`](https://github.com/Lomray-Software/vite-template/blob/example/minimal/src/server.ts) creates a manager per request and uses the server helpers.
+- [`src/client.ts`](https://github.com/Lomray-Software/vite-template/blob/example/minimal/src/client.ts) constructs the client manager from the server state.
+- [`src/app.tsx`](https://github.com/Lomray-Software/vite-template/blob/example/minimal/src/app.tsx) supplies that manager to the provider.
 
 Change tags order:
 ```typescript jsx
