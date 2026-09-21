@@ -1,6 +1,5 @@
-import { expect } from 'chai';
 import React from 'react';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Manager } from '../../src';
 import ServerManager from '../../src/server';
 

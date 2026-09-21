@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect } from 'chai';
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ParserManager from '../__helpers__/parser-manager';
 import { Manager, TagStatus } from '../src';
 import type { IMetaManagerTags } from '../src/manager';

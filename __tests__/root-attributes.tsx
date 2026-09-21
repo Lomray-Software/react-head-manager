@@ -1,6 +1,5 @@
-import { expect } from 'chai';
 import React from 'react';
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Manager } from '../src';
 
 const themeAttribute = 'data-theme';
