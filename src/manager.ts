@@ -80,6 +80,8 @@ export interface IMetaManagerTags {
     {
       element?: ReactElement;
       domElement?: HTMLElement;
+      /** Original markup of an untouched static tag, emitted verbatim by the server. */
+      source?: string;
       order: number;
       containerId: string;
       status: TagStatus;
@@ -344,6 +346,7 @@ class Manager {
     containerId: string,
     isReplace = true,
     status = TagStatus.init,
+    sources?: (string | undefined)[],
   ): void {
     // unwrap fragment
     const clearElements: ReactNode =
@@ -369,6 +372,8 @@ class Manager {
         containerId,
         isReplace,
         status,
+        undefined,
+        sources?.[index],
       );
     });
 
@@ -385,6 +390,7 @@ class Manager {
     isReplace: boolean,
     status: TagStatus,
     domElement?: HTMLElement,
+    source?: string,
   ): void {
     const { type } = child;
     const { element, elementProps } = this.cloneElement(child);
@@ -463,6 +469,7 @@ class Manager {
       order: this.getElementOrder(elementProps, type, key),
       containerId,
       status,
+      ...(source === undefined ? {} : { source }),
     });
   }
 
@@ -641,8 +648,15 @@ class Manager {
 
   /**
    * Push new meta tags
+   *
+   * @param sources original markup per child index; a tag stored with one is served verbatim
    */
-  public pushTags(elements: ReactNode, containerId: string, isReplace = true): void {
+  public pushTags(
+    elements: ReactNode,
+    containerId: string,
+    isReplace = true,
+    sources?: (string | undefined)[],
+  ): void {
     const isAdded = this.tags.containers.has(containerId);
 
     this.pushElements(
@@ -650,6 +664,7 @@ class Manager {
       containerId,
       isReplace,
       isAdded ? TagStatus.synced : TagStatus.init,
+      sources,
     );
 
     EventManager.publish(Events.PUSH_TAGS, { elements, containerId });

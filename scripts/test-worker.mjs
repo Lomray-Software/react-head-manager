@@ -45,7 +45,7 @@ const runWithoutDOM = (bundle) => {
 
 for (const { isServer, html, state } of expected) {
   assert.equal(isServer, true);
-  assert.match(html, /<meta charSet="UTF-8"\/>/);
+  assert.match(html, /<meta charset="UTF-8">/);
   assert.match(html, /<script type="application\/ld\+json">{"value":"<tag>&"}<\/script>/);
   assert.match(html, /<style>\.test > a { color: red; }<\/style>/);
   assert.match(html, /<main>Unchanged &amp; body<\/main>/);

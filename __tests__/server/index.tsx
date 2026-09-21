@@ -155,4 +155,102 @@ describe('ServerManager', () => {
         '<custom-meta buildId="Worker"></custom-meta></head><body></body></html>',
     );
   });
+
+  describe('static head passthrough', () => {
+    const font =
+      '<link rel="stylesheet" href="https://fonts.example/css2?family=Inter&display=swap" media="print" onload="this.media=\'all\'" />';
+    const script = '<script onerror="x()" src="a.js" async></script>';
+    const page = (head: string) => `<html lang="en"><head>${head}</head><body></body></html>`;
+    const inject = (head: string, tags?: React.ReactNode) => {
+      const manager = new Manager();
+
+      manager.isServer = true;
+
+      if (tags) {
+        manager.pushTags(tags, containerId);
+      }
+
+      return { manager, result: ServerManager.inject(page(head), manager) };
+    };
+
+    it('should serve untouched tags verbatim, including inline handlers and boolean attributes', () => {
+      const { result } = inject(`\n  ${font}\n  ${script}\n  <meta charset="utf-8">\n`);
+
+      expect(result).to.contain(font);
+      expect(result).to.contain(script);
+      expect(result).to.contain('<meta charset="utf-8">');
+    });
+
+    it('should replace a static tag overridden by the application without duplicating it', () => {
+      const { result } = inject(
+        `<meta name="description" content="static">${font}<title>Static</title>`,
+        <>
+          <title>App</title>
+          <meta name="description" content="app" />
+        </>,
+      );
+
+      expect(result).to.contain('<meta name="description" content="app"/>');
+      expect(result).to.contain('<title>App</title>');
+      expect(result).to.not.contain('static');
+      expect(result).to.not.contain('Static');
+      expect(result.match(/name="description"/g)).to.have.length(1);
+      expect(result).to.contain(font);
+    });
+
+    it('should keep the manager order for untouched tags', () => {
+      const head = `<meta name="a" content="1">${script}<meta name="b" content="2">`;
+      const before = inject(head).result;
+      const { result } = inject(head, <meta name="c" content="3" />);
+
+      expect(before).to.equal(
+        page(`<meta name="a" content="1"><meta name="b" content="2">${script}`),
+      );
+      expect(result.indexOf('name="a"')).to.be.below(result.indexOf('name="b"'));
+      expect(result.indexOf('name="b"')).to.be.below(result.indexOf('a.js'));
+    });
+
+    it('should keep head comments next to the following tag, and trailing ones at the end', () => {
+      const { result } = inject(
+        `<!-- fonts -->${font}<!--[if IE]><meta name="ie" content="1"><![endif]--><title>T</title><!-- end -->`,
+      );
+
+      expect(result).to.contain(`<!-- fonts -->${font}`);
+      expect(result).to.contain(
+        '<!--[if IE]><meta name="ie" content="1"><![endif]--><title>T</title>',
+      );
+      expect(result).to.match(/<!-- end --><\/head>/);
+    });
+
+    it('should keep a tag that directly follows <head> and replacement patterns in its content', () => {
+      const inline = "<script>window.price = '$1 $& $$';</script>";
+      const { result } = inject(`<meta name="first" content="1">${inline}`);
+
+      expect(result).to.contain('<meta name="first" content="1">');
+      expect(result).to.contain(inline);
+    });
+
+    it('should adopt the verbatim tags on the client without recreating them', () => {
+      const { result } = inject(`${font}${script}<meta name="description" content="static">`);
+      const [, head] = /<head>(.*)<\/head>/s.exec(result)!;
+
+      document.head.innerHTML = head;
+
+      const link = document.head.querySelector('link')!;
+      const client = new Manager();
+
+      client.isServer = false;
+      client.analyzeClientHead();
+      client.pushTags(<meta name="description" content="client" />, containerId);
+
+      expect(document.head.querySelector('link')).to.equal(link);
+      expect(link.getAttribute('onload')).to.equal("this.media='all'");
+      expect(document.head.querySelectorAll('link, script')).to.have.length(2);
+      expect(document.head.querySelectorAll('meta[name="description"]')).to.have.length(1);
+      expect(
+        document.head.querySelector('meta[name="description"]')!.getAttribute('content'),
+      ).to.equal('client');
+      document.head.innerHTML = '';
+    });
+  });
 });
