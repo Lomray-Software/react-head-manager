@@ -75,9 +75,10 @@ try {
   const installed = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
 
   assert.equal(installed.sideEffects, false);
-  assert.ok(
-    installed.dependencies['html-react-parser'],
-    'The server parser must remain a runtime dependency.',
+  assert.equal(
+    installed.dependencies,
+    undefined,
+    'The package must not have runtime dependencies.',
   );
   const forbidden =
     /html-react-parser|html-dom-parser|htmlparser2|domhandler|entities|style-to-js|inline-style-parser|react-dom\/server/;

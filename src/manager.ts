@@ -31,7 +31,7 @@ const attributeNames = new Map([
 const propNames = new Map([...attributeNames].map(([prop, attribute]) => [attribute, prop]));
 
 // Presence means true for HTML boolean attributes, regardless of their text value.
-const booleanAttributes = new Set([
+export const booleanAttributes = new Set([
   'allowfullscreen',
   'async',
   'autofocus',

@@ -108,11 +108,11 @@ Explore [demo app](https://github.com/Lomray-Software/vite-template) to more und
 
 `MetaServer.inject` serves the static `<head>` of your HTML template as written. A tag the application does not override reaches the client verbatim, so inline handlers (`<link rel="stylesheet" media="print" onload="this.media='all'">`, `<script onerror="...">`), attribute casing and boolean attributes survive. Comments stay with the tag that follows them. Only tags replaced by a `<Meta>` from the application are rendered through React. Tags are still ordered by the manager (charset, viewport, title, base, meta, link, script, noscript, style; override with `data-order`). On hydration the client adopts existing head nodes and only touches the tags it owns.
 
-The `@lomray/react-head-manager/server` entry supports Cloudflare Workers and other non-DOM edge bundles, including Vite SSR with `ssr.target: 'webworker'`. `MetaServer.inject` and `MetaServer.getState` work without a `document` global or bundler aliases for `html-dom-parser`.
+The `@lomray/react-head-manager/server` entry supports Cloudflare Workers and other non-DOM edge bundles, including Vite SSR with `ssr.target: 'webworker'`. `MetaServer.inject` and `MetaServer.getState` work without a `document` global or any HTML parser package.
 
 ## Bundle size
 
-The browser build reads the existing head from the DOM and ships no HTML parser. `html-react-parser` is used only by the server helper.
+The browser build reads the existing head from the DOM and ships no HTML parser. The server helper reads the template head with its own small tokenizer, so the package has no runtime dependencies.
 
 ## Bugs and feature requests
 
