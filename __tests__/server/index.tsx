@@ -39,7 +39,7 @@ describe('ServerManager', () => {
         '<html lang="en"><head><title>Original</title></head><body class="original"></body></html>',
       tags: (
         <>
-          {/* eslint-disable-next-line jsx-a11y/html-has-lang -- lang comes from the input HTML. */}
+          {/* eslint-disable-next-line jsx-a11y-x/html-has-lang -- lang comes from the input HTML. */}
           <html dir="rtl" className="x" />
           <body className="y" />
         </>

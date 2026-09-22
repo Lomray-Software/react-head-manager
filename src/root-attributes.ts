@@ -5,6 +5,9 @@ interface IOwnedValue {
 }
 
 type Values = Map<string, string | null>;
+
+/** Inline style values as React passes them through `style`. */
+export type TStyleValue = string | number | boolean | null | undefined;
 type Ownership = Map<string, IOwnedValue>;
 
 /** Track contributions, including individual class tokens and CSS properties. */
@@ -65,7 +68,7 @@ class RootAttributes {
   public sync(
     element: HTMLElement,
     attributes: Values,
-    style: Record<string, unknown>,
+    style: Record<string, TStyleValue>,
     seed = false,
   ): void {
     const presence = new Map(

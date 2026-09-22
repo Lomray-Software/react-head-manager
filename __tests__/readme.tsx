@@ -37,7 +37,7 @@ const readApp = () => {
   };
 
   // Evaluate only this repository's README fixture; imports are restricted above.
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call
   new Function('require', 'module', 'exports', code)(requireExample, module, module.exports);
 
   return module.exports.App;

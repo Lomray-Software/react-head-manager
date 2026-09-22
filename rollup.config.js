@@ -14,21 +14,24 @@ const resolveDeclarationImports = () => ({
   name: 'resolve-declaration-imports',
   writeBundle() {
     const files = readdirSync(dest, { recursive: true, encoding: 'utf8' })
-      .filter(file => file.endsWith('.d.ts'))
-      .map(file => path.join(dest, file));
+      .filter((file) => file.endsWith('.d.ts'))
+      .map((file) => path.join(dest, file));
 
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
-      const resolved = source.replace(/(from\s+|import\()(['"])(\.{1,2}\/[^'"]*)\2/g, (match, keyword, quote, specifier) => {
-        if (specifier.endsWith('.js')) {
-          return match;
-        }
+      const resolved = source.replace(
+        /(from\s+|import\()(['"])(\.{1,2}\/[^'"]*)\2/g,
+        (match, keyword, quote, specifier) => {
+          if (specifier.endsWith('.js')) {
+            return match;
+          }
 
-        const target = path.join(path.dirname(file), specifier);
-        const suffix = existsSync(`${target}.d.ts`) ? '.js' : '/index.js';
+          const target = path.join(path.dirname(file), specifier);
+          const suffix = existsSync(`${target}.d.ts`) ? '.js' : '/index.js';
 
-        return `${keyword}${quote}${specifier}${suffix}${quote}`;
-      });
+          return `${keyword}${quote}${specifier}${suffix}${quote}`;
+        },
+      );
 
       if (resolved !== source) {
         writeFileSync(file, resolved);
@@ -38,10 +41,7 @@ const resolveDeclarationImports = () => ({
 });
 
 export default {
-  input: [
-    'src/index.ts',
-    'src/server/index.ts',
-  ],
+  input: ['src/index.ts', 'src/server/index.ts'],
   output: {
     dir: dest,
     format: 'es',
@@ -66,7 +66,7 @@ export default {
         { src: 'package.json', dest: dest },
         { src: 'README.md', dest: dest },
         { src: 'LICENSE', dest: dest },
-      ]
+      ],
     }),
     resolveDeclarationImports(),
   ],
