@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { ConsistentSuspenseProvider } from '@lomray/consistent-suspense';
-import ts from 'typescript';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import * as HeadManager from '../src';
 import MetaServer from '../src/server';
@@ -16,7 +16,11 @@ const readApp = () => {
   }
 
   const { outputText: code } = ts.transpileModule(source, {
-    compilerOptions: { jsx: ts.JsxEmit.React, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
+    compilerOptions: {
+      jsx: ts.JsxEmit.React,
+      module: ts.ModuleKind.CommonJS,
+      esModuleInterop: true,
+    },
   });
   const imports: Record<string, unknown> = {
     react: React,
@@ -32,7 +36,8 @@ const readApp = () => {
     return imports[name];
   };
 
-  // Execute the documented example rather than a separately maintained copy.
+  // Evaluate only this repository's README fixture; imports are restricted above.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('require', 'module', 'exports', code)(requireExample, module, module.exports);
 
   return module.exports.App;
