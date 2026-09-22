@@ -1,0 +1,24 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "React Head Manager",
+  "description": "React head and meta tag management with server rendering and Suspense support.",
+  "branch": "prod",
+  "excludeFolders": [
+    "__tests__",
+    "__mocks__",
+    "scripts",
+    "src",
+    "lib",
+    "node_modules"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md"
+  ],
+  "rules": [
+    "Pass an explicit Manager to MetaManagerProvider. Create a fresh server manager for each request, and use that same manager with the server helpers.",
+    "The README createRoot example requires React 18+ and mounts a client-rendered app. It is not an SSR hydration example; follow the linked SSR template for server state and hydration.",
+    "For @lomray/react-head-manager@2.2.2, native Node ESM uses the default server helper at @lomray/react-head-manager/server/index.js. Bundlers such as Vite can resolve @lomray/react-head-manager/server."
+  ]
+}
