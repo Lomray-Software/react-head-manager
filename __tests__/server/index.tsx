@@ -106,6 +106,7 @@ describe('ServerManager', () => {
   it('should return meta manager state', () => {
     const manager = new Manager();
 
+    manager.isServer = true;
     manager.pushTags(<html lang="en-EN" />, 'custom');
     manager.pushTags(<html lang="en" />, Manager.rootContainerId, false);
 

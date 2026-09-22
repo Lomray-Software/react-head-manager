@@ -18,7 +18,7 @@ The package is distributed using [npm](https://www.npmjs.com/), the node package
 npm i --save @lomray/react-head-manager
 ```
 
-__WARNING:__ this package use [@lomray/consistent-suspense](https://github.com/Lomray-Software/consistent-suspense) for generate stable id's inside Suspense.
+**WARNING:** this package use [@lomray/consistent-suspense](https://github.com/Lomray-Software/consistent-suspense) for generate stable id's inside Suspense.
 
 ## Usage
 
@@ -76,6 +76,7 @@ The [minimal SSR template](https://github.com/Lomray-Software/vite-template/tree
 - [`src/app.tsx`](https://github.com/Lomray-Software/vite-template/blob/example/minimal/src/app.tsx) supplies that manager to the provider.
 
 Change tags order:
+
 ```typescript jsx
 /**
  * Way 1
@@ -106,7 +107,7 @@ Explore [demo app](https://github.com/Lomray-Software/vite-template) to more und
 
 ## Workers and edge rendering
 
-`MetaServer.inject` serves the static `<head>` of your HTML template as written. A tag the application does not override reaches the client verbatim, so inline handlers (`<link rel="stylesheet" media="print" onload="this.media='all'">`, `<script onerror="...">`), attribute casing and boolean attributes survive. Comments stay with the tag that follows them. Only tags replaced by a `<Meta>` from the application are rendered through React. Tags are still ordered by the manager (charset, viewport, title, base, meta, link, script, noscript, style; override with `data-order`). On hydration the client adopts existing head nodes and only touches the tags it owns.
+`MetaServer.inject` serves the static `<head>` of your HTML template as written. A tag the application does not override reaches the client verbatim, so inline handlers (`<link rel="stylesheet" media="print" onload="this.media='all'">`, `<script onerror="...">`), attribute casing and boolean attributes survive. Comments stay with the tag that follows them. Only tags replaced by a `<Meta>` from the application are rendered through React. Tags are still ordered by the manager (charset, viewport, title, base, meta, link, script, noscript, style; override with `data-order`). On hydration the client adopts the existing head nodes, including the tags of `<Meta>` components inside streamed Suspense boundaries, and only touches the tags it owns: a tag whose props differ from the server output is updated in place, and a tag with the same key survives navigation as the same node.
 
 The `@lomray/react-head-manager/server` entry supports Cloudflare Workers and other non-DOM edge bundles, including Vite SSR with `ssr.target: 'webworker'`. `MetaServer.inject` and `MetaServer.getState` work without a `document` global or any HTML parser package.
 
@@ -119,6 +120,7 @@ The browser build reads the existing head from the DOM and ships no HTML parser.
 Bug or a feature request, [please open a new issue](https://github.com/Lomray-Software/react-head-manager/issues/new).
 
 ## License
+
 Made with 💚
 
 Published under [MIT License](./LICENSE).
