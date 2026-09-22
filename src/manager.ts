@@ -30,6 +30,40 @@ const attributeNames = new Map([
 ]);
 const propNames = new Map([...attributeNames].map(([prop, attribute]) => [attribute, prop]));
 
+const textEscapes = new Map([
+  ['&', '&amp;'],
+  ['<', '&lt;'],
+  ['>', '&gt;'],
+  ['"', '&quot;'],
+  ["'", '&#x27;'],
+]);
+
+/**
+ * Text as React writes it into a raw text element (script, style): the browser keeps it escaped.
+ */
+const escapeText = (text: string): string =>
+  text.replace(/[&<>"']/g, (char) => textEscapes.get(char) ?? char);
+
+/**
+ * Text content the children of a tag stand for; undefined when they are not plain text.
+ */
+const getChildrenText = (children: unknown): string | undefined => {
+  const nodes = (Array.isArray(children) ? children : [children]).filter(
+    (node) => node != null && typeof node !== 'boolean',
+  ) as unknown[];
+
+  return nodes.every((node) => typeof node === 'string' || typeof node === 'number')
+    ? nodes.join('')
+    : undefined;
+};
+
+interface IDomAttributes {
+  attributes: Map<string, string>;
+  style?: Record<string, string>;
+  text?: string;
+  html?: string;
+}
+
 // Presence means true for HTML boolean attributes, regardless of their text value.
 export const booleanAttributes = new Set([
   'allowfullscreen',
@@ -164,6 +198,9 @@ class Manager {
 
   /** DOM ownership is private client state, separate from the public tag snapshot. */
   private rootAttributes = new WeakMap<HTMLElement, RootAttributes>();
+
+  /** Live head nodes have been adopted, see analyzeClientHead. */
+  private isHeadAnalyzed = false;
 
   /**
    * @constructor
@@ -343,6 +380,8 @@ class Manager {
 
   /**
    * Push react elements to meta state
+   *
+   * @returns true when a pushed tag still has to reach the DOM
    */
   protected pushElements(
     elements: ReactNode,
@@ -350,7 +389,9 @@ class Manager {
     isReplace = true,
     status = TagStatus.init,
     sources?: (string | undefined)[],
-  ): void {
+  ): boolean {
+    let isPending = false;
+
     // unwrap fragment
     const clearElements: ReactNode =
       elements && typeof elements === 'object' && 'type' in elements && elements.type === Fragment
@@ -369,22 +410,27 @@ class Manager {
         return;
       }
 
-      this.pushElement(
-        { type: child.type, props: child.props as Record<string, any> },
-        index,
-        containerId,
-        isReplace,
-        status,
-        undefined,
-        sources?.[index],
-      );
+      isPending =
+        this.pushElement(
+          { type: child.type, props: child.props as Record<string, any> },
+          index,
+          containerId,
+          isReplace,
+          status,
+          undefined,
+          sources?.[index],
+        ) || isPending;
     });
 
     this.tags.containers.add(containerId);
+
+    return isPending;
   }
 
   /**
    * Register a React element or a snapshot of a live DOM element.
+   *
+   * @returns true when the tag still has to reach the DOM
    */
   protected pushElement(
     child: { type: string; props: Record<string, any> },
@@ -394,7 +440,7 @@ class Manager {
     status: TagStatus,
     domElement?: HTMLElement,
     source?: string,
-  ): void {
+  ): boolean {
     const { type } = child;
     const isRender = this.isServer && source === undefined && type !== 'html' && type !== 'body';
     const { element, elementProps } = this.cloneElement(child, isRender);
@@ -420,7 +466,7 @@ class Manager {
       case 'html':
       case 'body':
         if (!isReplace && this.tags[type].has(key)) {
-          return;
+          return false;
         }
 
         this.tags[type].set(containerId, {
@@ -431,7 +477,7 @@ class Manager {
               : this.getElementOrder(elementProps, type, key),
         });
 
-        return;
+        return false;
 
       case 'link':
       case 'script':
@@ -453,12 +499,36 @@ class Manager {
         existedTag.domElement = domElement;
       }
 
-      return;
+      return false;
     }
 
+    const isNotUnique = this.isNotUniqueTag(key);
+
     // skip push already existed in head not unique tags
-    if (this.isNotUniqueTag(key) && existedTag?.status === TagStatus.synced) {
-      return;
+    if (isNotUnique && existedTag?.status === TagStatus.synced) {
+      return false;
+    }
+
+    let tagStatus = status;
+    let tagElement = domElement;
+
+    /**
+     * A live tag with the same key is updated in place instead of being re-created.
+     * On hydration (status synced) the server rendered every tag of the container: not unique tags
+     * adopt their live node by content, a tag the server did not render is inserted like any other.
+     */
+    if (!this.isServer && !domElement && containerId !== Manager.rootContainerId) {
+      if (isNotUnique) {
+        tagElement =
+          status === TagStatus.synced ? this.takeRootElement(type, elementProps) : undefined;
+      } else if (existedTag?.domElement?.isConnected) {
+        tagElement = existedTag.domElement;
+        this.applyDomElementAttributes(tagElement, elementProps);
+      } else {
+        tagElement = undefined;
+      }
+
+      tagStatus = tagElement ? TagStatus.synced : TagStatus.init;
     }
 
     this.tags.meta.set(key, {
@@ -468,15 +538,38 @@ class Manager {
          * create DOM element only for client side
          * generate DOM element for root container inside @see this.analyzeClientHead
          */
-        domElement ??
+        tagElement ??
         (containerId === Manager.rootContainerId
           ? undefined
           : this.createDomElement({ type, props: elementProps })),
       order: this.getElementOrder(elementProps, type, key),
       containerId,
-      status,
+      status: tagStatus,
       ...(source === undefined ? {} : { source }),
     });
+
+    return tagStatus === TagStatus.init;
+  }
+
+  /**
+   * Adopt the live not unique tag with the same type and content, still owned by the root container.
+   */
+  private takeRootElement(type: string, props: Record<string, any>): HTMLElement | undefined {
+    for (const [key, { domElement, containerId }] of this.tags.meta) {
+      if (
+        containerId === Manager.rootContainerId &&
+        this.isNotUniqueTag(key) &&
+        domElement?.isConnected &&
+        domElement.tagName.toLowerCase() === type &&
+        this.isSameDomElement(domElement, props)
+      ) {
+        this.tags.meta.delete(key);
+
+        return domElement;
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -497,44 +590,95 @@ class Manager {
   }
 
   /**
-   * Apply props to dom element
+   * DOM attributes, inline style, text and markup the props of a tag stand for
    */
-  protected applyDomElementAttributes(element: Element, props: Record<string, any> = {}): void {
-    const tagName = element.tagName.toLowerCase();
+  private getDomAttributes(tagName: string, props: Record<string, any>): IDomAttributes {
     const reservedAttributes = Object.values(this.reservedAttributes);
+    const result: IDomAttributes = { attributes: new Map() };
 
-    // apply attributes
-    Object.entries(props).forEach(([name, value]) => {
-      if (reservedAttributes.includes(name)) {
-        return;
+    for (const [name, value] of Object.entries(props)) {
+      if (reservedAttributes.includes(name) || value === false || value == null) {
+        continue;
       }
 
       if (name === 'children') {
-        element.innerHTML = value === false || value == null ? '' : (value as string);
-
-        return;
-      }
-
-      const attribute = this.replaceAttribute(tagName, name);
-
-      if (value === false || value == null) {
-        element.removeAttribute(attribute);
-
-        return;
-      }
-
-      if (name === 'style' && typeof value === 'object') {
-        return Object.entries(value as Record<string, string>).forEach(
-          ([styleName, styleValue]) => {
-            // @ts-ignore
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            element['style'][styleName] = styleValue;
-          },
+        result.text = getChildrenText(value);
+      } else if (name === 'dangerouslySetInnerHTML') {
+        result.html = (value as { __html?: string })?.__html ?? '';
+      } else if (name === 'style' && typeof value === 'object') {
+        result.style = value as Record<string, string>;
+      } else {
+        result.attributes.set(
+          this.replaceAttribute(tagName, name),
+          value === true ? '' : String(value),
         );
       }
+    }
 
-      element.setAttribute(attribute, value === true ? '' : (value as string));
-    });
+    return result;
+  }
+
+  /**
+   * Whether a live element already carries the attributes and text of the props
+   */
+  private isSameDomElement(element: HTMLElement, props: Record<string, any>): boolean {
+    const { attributes, text, html } = this.getDomAttributes(element.tagName.toLowerCase(), props);
+
+    if (element.attributes.length !== attributes.size) {
+      return false;
+    }
+
+    for (const [name, value] of attributes) {
+      if (element.getAttribute(name) !== value) {
+        return false;
+      }
+    }
+
+    if (html !== undefined) {
+      return element.innerHTML === html;
+    }
+
+    return (
+      text === undefined || element.textContent === text || element.textContent === escapeText(text)
+    );
+  }
+
+  /**
+   * Apply props to dom element: only what differs is touched, attributes not in the props are removed.
+   */
+  protected applyDomElementAttributes(element: Element, props: Record<string, any> = {}): void {
+    const { attributes, style, text, html } = this.getDomAttributes(
+      element.tagName.toLowerCase(),
+      props,
+    );
+
+    for (const { name } of Array.from(element.attributes)) {
+      if (!attributes.has(name)) {
+        element.removeAttribute(name);
+      }
+    }
+
+    for (const [name, value] of attributes) {
+      if (element.getAttribute(name) !== value) {
+        element.setAttribute(name, value);
+      }
+    }
+
+    if (style) {
+      Object.assign((element as HTMLElement).style, style);
+    }
+
+    if (html !== undefined) {
+      if (element.innerHTML !== html) {
+        element.innerHTML = html;
+      }
+    } else if (
+      text !== undefined &&
+      element.textContent !== text &&
+      element.textContent !== escapeText(text)
+    ) {
+      element.textContent = text;
+    }
   }
 
   /** Merge root style objects while retaining ownership of each contributed property. */
@@ -668,7 +812,12 @@ class Manager {
   ): void {
     const isAdded = this.tags.containers.has(containerId);
 
-    this.pushElements(
+    // live head nodes must be known before the tags of a server rendered container adopt them
+    if (!this.isServer && !this.isHeadAnalyzed) {
+      this.analyzeClientHead();
+    }
+
+    const isPending = this.pushElements(
       elements,
       containerId,
       isReplace,
@@ -679,7 +828,7 @@ class Manager {
     EventManager.publish(Events.PUSH_TAGS, { elements, containerId });
 
     // skip sync already synced tags
-    if (this.isServer || isAdded) {
+    if (this.isServer || (isAdded && !isPending)) {
       return;
     }
 
@@ -757,9 +906,11 @@ class Manager {
    * Initial analyze client head meta tags
    */
   public analyzeClientHead(): void {
-    if (this.isServer) {
+    if (this.isServer || this.isHeadAnalyzed) {
       return;
     }
+
+    this.isHeadAnalyzed = true;
 
     for (const element of [document.documentElement, document.body]) {
       if (element) {
