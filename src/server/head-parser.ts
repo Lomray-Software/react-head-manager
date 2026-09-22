@@ -73,7 +73,7 @@ const voidElements = new Set([
 const rawTextEnds = new Map(
   ['script', 'style', 'title', 'textarea'].map((name) => [
     name,
-    new RegExp(`</${name}(?=[\\t\\n\\f\\r >])`, 'gi'),
+    new RegExp(String.raw`</${name}(?=[\t\n\f\r >])`, 'gi'),
   ]),
 );
 const decodedRawText = new Set(['title']);

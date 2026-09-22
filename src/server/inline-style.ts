@@ -5,11 +5,73 @@ const COMMENT = /\/\*[^*]*\*+([^/*][^*]*\*+)*\//g;
 const LEADING_WHITESPACE = /^\s*/;
 const PROPERTY = /^(\*?[-#/*\\\w]+(\[[\da-z_-]+\])?)\s*/;
 const COLON = /^:\s*/;
-const VALUE = /^((?:'(?:\\'|.)*?'|"(?:\\"|.)*?"|\([^)]*?\)|[^};])+)/;
 const SEPARATOR = /^[;\s]*/;
 const CUSTOM_PROPERTY = /^--[\da-z-]+$/i;
 const MS_PREFIX = /^-(ms)-/;
 const HYPHEN_LETTER = /-([a-z])/g;
+
+const isLineTerminator = (char: string): boolean =>
+  char === '\n' || char === '\r' || char === ' ' || char === ' ';
+
+/**
+ * End of a quoted string that starts at `start`, as the original grammar
+ * `'(?:\\'|.)*?'` finds it: the first unescaped quote on the same line, or, when there is
+ * none, the last escaped quote on that line. -1 when the string is unterminated.
+ */
+const findQuoteEnd = (value: string, start: number): number => {
+  const quote = value[start];
+  let lastEscaped = -1;
+
+  for (let position = start + 1; position < value.length; position += 1) {
+    const char = value[position];
+
+    if (isLineTerminator(char)) {
+      break;
+    }
+
+    if (char === quote) {
+      return position;
+    }
+
+    if (char === '\\' && value[position + 1] === quote) {
+      position += 1;
+      lastEscaped = position;
+    }
+  }
+
+  return lastEscaped;
+};
+
+/**
+ * Length of a declaration value: everything up to the first `;` or `}`, where quoted strings
+ * and parentheses are read as a whole. A quote or a parenthesis without a closing counterpart
+ * is an ordinary character.
+ */
+const matchValueLength = (value: string): number => {
+  let position = 0;
+
+  while (position < value.length) {
+    const char = value[position];
+
+    if (char === ';' || char === '}') {
+      break;
+    }
+
+    if (char === "'" || char === '"') {
+      const end = findQuoteEnd(value, position);
+
+      position = end === -1 ? position + 1 : end + 1;
+    } else if (char === '(') {
+      const end = value.indexOf(')', position + 1);
+
+      position = end === -1 ? position + 1 : end + 1;
+    } else {
+      position += 1;
+    }
+  }
+
+  return position;
+};
 
 /**
  * React style key: custom properties and single words stay as they are,
@@ -79,9 +141,9 @@ const parseDeclarations = (style: string): Record<string, string> => {
       throw new Error("property missing ':'");
     }
 
-    const value = match(VALUE) ?? '';
+    const value = rest.slice(0, matchValueLength(rest));
 
-    rest = rest.replace(LEADING_WHITESPACE, '');
+    rest = rest.slice(value.length).replace(LEADING_WHITESPACE, '');
     match(SEPARATOR);
 
     const name = property.replace(COMMENT, '').trim();
