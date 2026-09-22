@@ -222,7 +222,7 @@ interface IEntityMatch {
  */
 const decodeCodePoint = (codePoint: number): string => {
   if ((codePoint >= 0xd800 && codePoint <= 0xdfff) || codePoint > MAX_CODE_POINT) {
-    return '�';
+    return '\uFFFD';
   }
 
   return String.fromCodePoint(windows1252.get(codePoint) ?? codePoint);

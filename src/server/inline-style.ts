@@ -11,7 +11,7 @@ const MS_PREFIX = /^-(ms)-/;
 const HYPHEN_LETTER = /-([a-z])/g;
 
 const isLineTerminator = (char: string): boolean =>
-  char === '\n' || char === '\r' || char === ' ' || char === ' ';
+  char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029';
 
 /**
  * End of a quoted string that starts at `start`, as the original grammar
