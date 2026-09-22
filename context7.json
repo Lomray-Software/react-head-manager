@@ -20,5 +20,7 @@
     "Pass an explicit Manager to MetaManagerProvider. Create a fresh server manager for each request, and use that same manager with the server helpers.",
     "The README createRoot example requires React 18+ and mounts a client-rendered app. It is not an SSR hydration example; follow the linked SSR template for server state and hydration.",
     "For @lomray/react-head-manager@2.2.2, native Node ESM uses the default server helper at @lomray/react-head-manager/server/index.js. Bundlers such as Vite can resolve @lomray/react-head-manager/server."
-  ]
+  ],
+  "url": "https://context7.com/lomray-software/react-head-manager",
+  "public_key": "pk_EehfGIwKy1hHNX7dClOVS"
 }
