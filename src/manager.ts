@@ -226,7 +226,9 @@ class Manager {
   /**
    * Create DOM element from React element
    */
-  protected createDomElement(element: ReactElement): HTMLElement | undefined {
+  protected createDomElement(
+    element: Pick<ReactElement, 'type' | 'props'>,
+  ): HTMLElement | undefined {
     if (this.isServer) {
       return;
     }
@@ -261,16 +263,11 @@ class Manager {
 
     // try to build by props
     if (!key && !isSkipProps) {
-      key = Object.entries(props)
-        .map(([k, v]) => {
-          if (typeof v === 'string') {
-            return `[${k}]`;
-          }
-
-          return false;
-        })
-        .filter(Boolean)
-        .join('');
+      for (const name of Object.keys(props)) {
+        if (typeof props[name] === 'string') {
+          key += `[${name}]`;
+        }
+      }
     }
 
     if (!key) {
@@ -296,20 +293,25 @@ class Manager {
 
   /**
    * Clone react element
+   *
+   * @param isRender the element itself is only built when the server renders it
    */
-  protected cloneElement(element: Pick<ReactElement, 'type' | 'props'>): {
-    element: ReactElement;
+  protected cloneElement(
+    element: Pick<ReactElement, 'type' | 'props'>,
+    isRender = true,
+  ): {
+    element?: ReactElement;
     elementProps: Record<string, any>;
   } {
     const { type } = element;
     const props = { ...(element?.props ?? {}) } as Record<string, any>;
 
     // remove system attributes
-    Object.values(this.reservedAttributes).forEach((attrName) => {
+    for (const attrName of Object.values(this.reservedAttributes)) {
       if (props[attrName]) {
         delete props[attrName];
       }
-    });
+    }
 
     // fix multiple nodes for title
     if (type === 'title' && Array.isArray(props.children)) {
@@ -317,7 +319,7 @@ class Manager {
     }
 
     return {
-      element: React.createElement(type, props),
+      element: isRender ? React.createElement(type, props) : undefined,
       elementProps: props,
     };
   }
@@ -394,7 +396,8 @@ class Manager {
     source?: string,
   ): void {
     const { type } = child;
-    const { element, elementProps } = this.cloneElement(child);
+    const isRender = this.isServer && source === undefined && type !== 'html' && type !== 'body';
+    const { element, elementProps } = this.cloneElement(child, isRender);
     let key = this.tagsDefinitions[type]?.key ?? type;
 
     switch (type) {
@@ -466,7 +469,9 @@ class Manager {
          * generate DOM element for root container inside @see this.analyzeClientHead
          */
         domElement ??
-        (containerId === Manager.rootContainerId ? undefined : this.createDomElement(element)),
+        (containerId === Manager.rootContainerId
+          ? undefined
+          : this.createDomElement({ type, props: elementProps })),
       order: this.getElementOrder(elementProps, type, key),
       containerId,
       status,
@@ -482,13 +487,13 @@ class Manager {
       return {};
     }
 
-    return [...props.values()].reduce(
-      (res, val) => ({
-        ...res,
-        ...val.props,
-      }),
-      {},
-    );
+    const result: Record<string, any> = {};
+
+    for (const { props: tagProps } of props.values()) {
+      Object.assign(result, tagProps);
+    }
+
+    return result;
   }
 
   /**
@@ -539,11 +544,13 @@ class Manager {
     seed = false,
   ): void {
     const props = this.getRootTagProps(tags);
+    const reservedAttributes = Object.values(this.reservedAttributes);
+    const tagName = element.tagName.toLowerCase();
     const attributes = new Map(
       Object.entries(props)
-        .filter(([name]) => !Object.values(this.reservedAttributes).includes(name))
+        .filter(([name]) => !reservedAttributes.includes(name))
         .map(([name, value]) => [
-          this.replaceAttribute(element.tagName.toLowerCase(), name),
+          this.replaceAttribute(tagName, name),
           value === false || value == null ? null : value === true ? '' : String(value),
         ]),
     );
@@ -615,7 +622,8 @@ class Manager {
       if (status === TagStatus.drain) {
         prevElement = domElement.previousSibling;
         domElement?.remove();
-        meta.delete(key);
+        // `meta` is a sorted copy: drop the drained entry from the state, or it is kept forever.
+        this.tags.meta.delete(key);
 
         return;
       }
