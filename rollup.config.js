@@ -50,11 +50,7 @@ export default {
     preserveModulesRoot: 'src',
     exports: 'auto',
   },
-  external: [
-    '@lomray/consistent-suspense',
-    'html-dom-parser/lib/server/html-to-dom',
-    'html-react-parser',
-  ],
+  external: ['@lomray/consistent-suspense'],
   plugins: [
     peerDepsExternal({
       includeDependencies: true,

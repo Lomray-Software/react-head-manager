@@ -1,21 +1,16 @@
 // noinspection HtmlRequiredTitleElement
 
-import htmlToDOM from 'html-dom-parser/lib/server/html-to-dom';
-import domToReact from 'html-react-parser/lib/dom-to-react';
 import type { ReactElement, ReactNode } from 'react';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 import Manager from '../manager';
+import type { IParsedHead } from './head-parser';
+import { parseHead, parseRootTag } from './head-parser';
 
 interface IMetaManagerState {
   html: [string, Record<string, any>][];
   body: [string, Record<string, any>][];
   containers: string[];
-}
-
-interface IParsedHead {
-  elements: ReactNode[];
-  sources: (string | undefined)[];
 }
 
 interface IMatch {
@@ -24,22 +19,10 @@ interface IMatch {
   text: string;
 }
 
-/**
- * Parse markup without a DOM while preserving React attribute conversion.
- */
-const htmlParser = (html: string): ReturnType<typeof domToReact> =>
-  domToReact(htmlToDOM(html, { lowerCaseAttributeNames: false }));
-
 // The old pattern consumed the first character after <head>, losing a tag that followed it directly.
 const HEAD = /<head(?:\s[^>]*)?>(?<meta>.*?)<\/head>/s;
 const HTML_TAG = /<html[^>]*?>/gs;
 const BODY_TAG = /<body[^>]*?>/gs;
-
-const parserOptions = {
-  lowerCaseAttributeNames: false,
-  withStartIndices: true,
-  withEndIndices: true,
-};
 
 /**
  * A server renders a handful of distinct templates: their static parts are parsed once.
@@ -47,7 +30,7 @@ const parserOptions = {
  */
 const TEMPLATE_CACHE_LIMIT = 16;
 const headCache = new Map<string, IParsedHead>();
-const rootTagCache = new Map<string, ReturnType<typeof domToReact>>();
+const rootTagCache = new Map<string, ReactNode>();
 
 const memoize = <T>(cache: Map<string, T>, key: string, parse: (key: string) => T): T => {
   const cached = cache.get(key);
@@ -69,47 +52,6 @@ const memoize = <T>(cache: Map<string, T>, key: string, parse: (key: string) => 
   cache.set(key, value);
 
   return value;
-};
-
-/**
- * Parse the static head, keeping the original markup of every tag.
- * React drops what it does not accept as a prop (inline handlers, comments, unknown casing),
- * so untouched tags are served from their source instead of being rendered again.
- */
-const parseHead = (html: string): IParsedHead => {
-  const elements: ReactNode[] = [];
-  const sources: (string | undefined)[] = [];
-  let comments = '';
-
-  for (const node of htmlToDOM(html, parserOptions)) {
-    const markup = html.slice(node.startIndex ?? 0, (node.endIndex ?? -1) + 1);
-
-    if ((node.type as string) === 'comment') {
-      // Comments have no position of their own after sorting: keep them with the next tag.
-      comments += markup;
-
-      continue;
-    }
-
-    const element = domToReact([node]) as ReactNode;
-    const isTag =
-      typeof element === 'object' && 'name' in node && markup.startsWith(`<${node.name}`);
-
-    elements.push(element);
-    sources.push(isTag ? comments + markup : undefined);
-
-    if (isTag) {
-      comments = '';
-    }
-  }
-
-  // Comments after the last tag stay at the end of the head.
-  if (comments) {
-    elements.push(React.createElement('noscript'));
-    sources.push(comments);
-  }
-
-  return { elements, sources };
 };
 
 /**
@@ -170,13 +112,13 @@ class ServerManager {
 
     // add root html props
     manager.pushTags(
-      htmlTag ? memoize(rootTagCache, `${htmlTag.text.trim()}</html>`, htmlParser) : '',
+      htmlTag ? memoize(rootTagCache, `${htmlTag.text.trim()}</html>`, parseRootTag) : '',
       Manager.rootContainerId,
       false,
     );
     // add root body props
     manager.pushTags(
-      bodyTag ? memoize(rootTagCache, `${bodyTag.text.trim()}</body>`, htmlParser) : '',
+      bodyTag ? memoize(rootTagCache, `${bodyTag.text.trim()}</body>`, parseRootTag) : '',
       Manager.rootContainerId,
       false,
     );
