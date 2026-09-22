@@ -43,7 +43,8 @@ export const App = ({ manager }: { manager: Manager }) => (
 );
 ```
 
-For a client-rendered app, create one manager when mounting the application:
+For a client-rendered app on **React 18 or newer**, create one manager when mounting the application.
+The package also supports React 17, but `react-dom/client` and `createRoot` require React 18+:
 
 ```tsx
 import React from 'react';
@@ -64,7 +65,9 @@ createRoot(root).render(<App manager={new Manager()} />);
 
 Create a fresh manager for **each request** and pass it to both your application and the server helpers. Do not reuse one server manager across requests: it holds the tags and container state for that render.
 
-The server helpers are the default export from `@lomray/react-head-manager/server`. `MetaServer.inject(html, manager)` inserts the collected tags into your HTML; `MetaServer.getState(manager)` returns state for the client manager. SSR also needs the corresponding hydration and Suspense setup; the client-only mount above is not an SSR hydration example.
+The server helpers are the default export of `@lomray/react-head-manager/server`. `MetaServer.inject(html, manager)` inserts the collected tags into your HTML; `MetaServer.getState(manager)` returns state for the client manager. SSR also needs the corresponding hydration and Suspense setup; the client-only mount above is not an SSR hydration example.
+
+That import path works through a bundler such as Vite. The published package defines no `exports` map (checked on 2.2.2), so native Node ESM cannot resolve the directory import and needs the file path instead: `@lomray/react-head-manager/server/index.js`.
 
 The [minimal SSR template](https://github.com/Lomray-Software/vite-template/tree/example/minimal) shows the complete integration:
 
