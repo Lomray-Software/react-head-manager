@@ -1,4 +1,4 @@
-import React, { type ReactElement } from 'react';
+import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 import sinon from 'sinon';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,9 +7,7 @@ import type { IMetaManagerTags } from '../src/manager';
 
 const containerId = 'container-id';
 const renderServerMeta = (meta: IMetaManagerTags['meta']): string =>
-  ReactDOMServer.renderToString(
-    [...meta.values()].map(({ element }) => element) as unknown as ReactElement,
-  );
+  ReactDOMServer.renderToString([...meta.values()].map(({ element }) => element));
 const renderClientMeta = (meta: IMetaManagerTags['meta']): string => {
   const root = document.createElement('div');
 

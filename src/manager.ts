@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import React, { Fragment, Children } from 'react';
 import Events from './events';
 import RootAttributes from './root-attributes';
+import type { TStyleValue } from './root-attributes';
 import TagStatus from './tag-status';
 
 // One source of truth for React prop names and their HTML attribute names.
@@ -546,14 +547,14 @@ class Manager {
           value === false || value == null ? null : value === true ? '' : String(value),
         ]),
     );
-    const style = [...tags.values()].reduce<Record<string, unknown>>(
+    const style = [...tags.values()].reduce<Record<string, TStyleValue>>(
       (result, { props: tagProps }) => {
         if (!('style' in tagProps)) {
           return result;
         }
 
         return tagProps.style && typeof tagProps.style === 'object'
-          ? { ...result, ...(tagProps.style as Record<string, unknown>) }
+          ? { ...result, ...(tagProps.style as Record<string, TStyleValue>) }
           : {};
       },
       {},

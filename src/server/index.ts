@@ -102,7 +102,7 @@ class ServerManager {
      */
     const flush = (): void => {
       if (rendered.length) {
-        htmlMeta += ReactDOMServer.renderToString(rendered as unknown as ReactElement);
+        htmlMeta += ReactDOMServer.renderToString(rendered);
         rendered = [];
       }
     };
