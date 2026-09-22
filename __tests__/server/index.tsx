@@ -252,4 +252,51 @@ describe('ServerManager', () => {
       document.head.innerHTML = '';
     });
   });
+
+  describe('template reuse', () => {
+    const template =
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Static</title>' +
+      '<script>window.tpl = "<body class=\\"fake\\">";</script></head>' +
+      '<body class="site"><div id="root"></div></body></html>';
+
+    it('should keep managers independent when the same template is injected repeatedly', () => {
+      const results = ['one', 'two', 'one'].map((title) => {
+        const manager = new Manager();
+
+        manager.isServer = true;
+        manager.pushTags(
+          <>
+            {/* eslint-disable-next-line jsx-a11y-x/html-has-lang -- lang comes from the template. */}
+            <html data-page={title} />
+            <title>{title}</title>
+          </>,
+          containerId,
+        );
+
+        return ServerManager.inject(template, manager);
+      });
+
+      expect(results[0]).to.equal(results[2]);
+      expect(results[0]).to.contain('<html lang="en" data-page="one">');
+      expect(results[1]).to.contain('<html lang="en" data-page="two">');
+      expect(results[0]).to.contain('<title>one</title>');
+      expect(results[1]).to.contain('<title>two</title>');
+      expect(results[0]).to.not.contain('two');
+    });
+
+    it('should replace the real root tags, not markup inside the head', () => {
+      const manager = new Manager();
+
+      manager.isServer = true;
+      manager.pushTags(<body data-theme="dark" />, containerId);
+
+      const result = ServerManager.inject(template, manager);
+
+      expect(result).to.contain('<script>window.tpl = "<body class=\\"fake\\">";</script>');
+      expect(result).to.contain(
+        '<body class="site" data-theme="dark"><div id="root"></div></body>',
+      );
+      expect(result.match(/<body/g)).to.have.length(2);
+    });
+  });
 });

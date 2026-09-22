@@ -13,6 +13,17 @@ interface IMetaManagerState {
   containers: string[];
 }
 
+interface IParsedHead {
+  elements: ReactNode[];
+  sources: (string | undefined)[];
+}
+
+interface IMatch {
+  index: number;
+  end: number;
+  text: string;
+}
+
 /**
  * Parse markup without a DOM while preserving React attribute conversion.
  */
@@ -21,6 +32,8 @@ const htmlParser = (html: string): ReturnType<typeof domToReact> =>
 
 // The old pattern consumed the first character after <head>, losing a tag that followed it directly.
 const HEAD = /<head(?:\s[^>]*)?>(?<meta>.*?)<\/head>/s;
+const HTML_TAG = /<html[^>]*?>/gs;
+const BODY_TAG = /<body[^>]*?>/gs;
 
 const parserOptions = {
   lowerCaseAttributeNames: false,
@@ -29,11 +42,41 @@ const parserOptions = {
 };
 
 /**
+ * A server renders a handful of distinct templates: their static parts are parsed once.
+ * Parsed elements are never mutated (the manager copies props), so sharing them is safe.
+ */
+const TEMPLATE_CACHE_LIMIT = 16;
+const headCache = new Map<string, IParsedHead>();
+const rootTagCache = new Map<string, ReturnType<typeof domToReact>>();
+
+const memoize = <T>(cache: Map<string, T>, key: string, parse: (key: string) => T): T => {
+  const cached = cache.get(key);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const value = parse(key);
+
+  if (cache.size >= TEMPLATE_CACHE_LIMIT) {
+    const [oldest] = cache.keys();
+
+    if (oldest !== undefined) {
+      cache.delete(oldest);
+    }
+  }
+
+  cache.set(key, value);
+
+  return value;
+};
+
+/**
  * Parse the static head, keeping the original markup of every tag.
  * React drops what it does not accept as a prop (inline handlers, comments, unknown casing),
  * so untouched tags are served from their source instead of being rendered again.
  */
-const parseHead = (html: string): { elements: ReactNode[]; sources: (string | undefined)[] } => {
+const parseHead = (html: string): IParsedHead => {
   const elements: ReactNode[] = [];
   const sources: (string | undefined)[] = [];
   let comments = '';
@@ -70,6 +113,40 @@ const parseHead = (html: string): { elements: ReactNode[]; sources: (string | un
 };
 
 /**
+ * Find the first opening tag that is not part of the head markup.
+ */
+const findRootTag = (
+  regexp: RegExp,
+  html: string,
+  head: IMatch | undefined,
+): IMatch | undefined => {
+  regexp.lastIndex = 0;
+
+  for (let match = regexp.exec(html); match; match = regexp.exec(html)) {
+    const { index } = match;
+    const [text] = match;
+
+    if (!head || index >= head.end || index + text.length <= head.index) {
+      return { index, end: index + text.length, text };
+    }
+  }
+
+  return undefined;
+};
+
+/**
+ * Render root tag props into an opening tag.
+ * A neutral element is rendered so React 19 does not insert document structure.
+ */
+const renderRootTag = (type: string, props: Record<string, any>): string => {
+  const [tag] = ReactDOMServer.renderToStaticMarkup(React.createElement('div', props))
+    .replace(/^<div/, `<${type}`)
+    .split('</div>');
+
+  return tag;
+};
+
+/**
  * Helpers for server side
  */
 class ServerManager {
@@ -79,17 +156,30 @@ class ServerManager {
    * @return new html with actual meta tags
    */
   public static inject(htmlStr: string, manager: Manager): string {
-    const matchedMetaHtml = htmlStr.match(HEAD);
-    const matchedHtmlAttr = htmlStr.match(/<html[^>]*?>/s);
-    const matchedBodyAttr = htmlStr.match(/<body[^>]*?>/s);
-    const { elements: rootTags, sources } = parseHead(matchedMetaHtml?.groups?.meta.trim() ?? '');
-    const htmlTag = htmlParser(matchedHtmlAttr?.[0] ? `${matchedHtmlAttr?.[0].trim()}</html>` : '');
-    const bodyTag = htmlParser(matchedBodyAttr?.[0] ? `${matchedBodyAttr?.[0].trim()}</body>` : '');
+    const matchedHead = HEAD.exec(htmlStr);
+    const head: IMatch | undefined = matchedHead
+      ? { index: matchedHead.index, end: matchedHead.index + matchedHead[0].length, text: '' }
+      : undefined;
+    const htmlTag = findRootTag(HTML_TAG, htmlStr, head);
+    const bodyTag = findRootTag(BODY_TAG, htmlStr, head);
+    const { elements: rootTags, sources } = memoize(
+      headCache,
+      matchedHead?.groups?.meta.trim() ?? '',
+      parseHead,
+    );
 
     // add root html props
-    manager.pushTags(htmlTag, Manager.rootContainerId, false);
+    manager.pushTags(
+      htmlTag ? memoize(rootTagCache, `${htmlTag.text.trim()}</html>`, htmlParser) : '',
+      Manager.rootContainerId,
+      false,
+    );
     // add root body props
-    manager.pushTags(bodyTag, Manager.rootContainerId, false);
+    manager.pushTags(
+      bodyTag ? memoize(rootTagCache, `${bodyTag.text.trim()}</body>`, htmlParser) : '',
+      Manager.rootContainerId,
+      false,
+    );
     // add root meta tags to manager
     manager.pushTags(rootTags, Manager.rootContainerId, false, sources);
 
@@ -117,22 +207,32 @@ class ServerManager {
     }
 
     flush();
-    // Render a neutral element so React 19 does not insert document structure.
-    const [htmlTagWithProps] = ReactDOMServer.renderToStaticMarkup(
-      React.createElement('div', manager.getRootTagProps(html)),
-    )
-      .replace(/^<div/, '<html')
-      .split('</div>');
-    const [bodyTagWithProps] = ReactDOMServer.renderToStaticMarkup(
-      React.createElement('div', manager.getRootTagProps(body)),
-    )
-      .replace(/^<div/, '<body')
-      .split('</div>');
 
-    return htmlStr
-      .replace(HEAD, () => `<head>${htmlMeta}</head>`)
-      .replace(/<html[^>]*?>/s, () => htmlTagWithProps)
-      .replace(/<body[^>]*?>/s, () => bodyTagWithProps);
+    if (head) {
+      head.text = `<head>${htmlMeta}</head>`;
+    }
+
+    if (htmlTag) {
+      htmlTag.text = renderRootTag('html', manager.getRootTagProps(html));
+    }
+
+    if (bodyTag) {
+      bodyTag.text = renderRootTag('body', manager.getRootTagProps(body));
+    }
+
+    // Splice every replacement in one pass instead of copying the document per tag.
+    const replacements = [head, htmlTag, bodyTag]
+      .filter((match): match is IMatch => match !== undefined)
+      .sort((matchA, matchB) => matchA.index - matchB.index);
+    let result = '';
+    let position = 0;
+
+    for (const { index, end, text } of replacements) {
+      result += htmlStr.slice(position, index) + text;
+      position = end;
+    }
+
+    return result + htmlStr.slice(position);
   }
 
   /**
