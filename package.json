@@ -59,10 +59,11 @@
     "globals": "^17.12.0",
     "html-react-parser": "^5.1.15",
     "husky": "^9.1.5",
-    "jsdom": "^25.0.0",
+    "jsdom": "^28.1.0",
     "lint-staged": "^17.5.1",
     "prettier": "^3.9.8",
     "react": "^18.2.0",
+    "react-dom": "^18.3.1",
     "rollup": "^4.21.2",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-peer-deps-external": "^2.2.4",
@@ -77,5 +78,13 @@
     "@lomray/event-manager": ">=2.0.2",
     "react": ">=17.0.2",
     "react-dom": ">=17.0.2"
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y-x": {
+      "minimatch": "^11.0.1"
+    },
+    "eslint-plugin-sonarjs": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
